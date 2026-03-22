@@ -1,0 +1,113 @@
+/* Professional Restaurant Management UI */
+
+/* Table Status Indicators - Professional Colors */
+.table-available {
+  @apply bg-blue-50 border-blue-300 hover:border-blue-500;
+}
+
+.table-occupied {
+  @apply bg-slate-100 border-slate-300 hover:border-slate-500;
+}
+
+.table-hold {
+  @apply bg-amber-50 border-amber-300 hover:border-amber-500;
+}
+
+/* Status Colors - Professional Palette */
+.status-pending {
+  @apply text-red-700 bg-red-50;
+}
+
+.status-preparing {
+  @apply text-blue-700 bg-blue-50;
+}
+
+.status-ready {
+  @apply text-emerald-700 bg-emerald-50;
+}
+
+.status-completed {
+  @apply text-slate-700 bg-slate-50;
+}
+
+/* Button Styles - Professional */
+.btn-primary {
+  @apply bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg px-4 py-2 transition-all duration-200 shadow-md hover:shadow-lg active:scale-95;
+}
+
+.btn-secondary {
+  @apply bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-lg px-4 py-2 transition-all duration-200 shadow-md hover:shadow-lg active:scale-95;
+}
+
+.btn-danger {
+  @apply bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg px-4 py-2 transition-all duration-200 shadow-md hover:shadow-lg active:scale-95;
+}
+
+.btn-outline {
+  @apply border-2 border-slate-300 text-slate-900 font-semibold rounded-lg px-4 py-2 hover:bg-slate-50 transition-all duration-200;
+}
+
+/* Card Styles - Professional */
+.card-light {
+  @apply bg-white rounded-lg border border-slate-200 p-6 card-shadow hover:card-shadow-hover transition-all duration-200;
+}
+
+/* Food Item Card - Professional */
+.menu-item-card {
+  @apply bg-white rounded-lg border border-slate-200 p-4 card-shadow hover:card-shadow-hover transition-all duration-200 cursor-pointer group;
+}
+
+.menu-item-card:hover {
+  @apply translate-y-[-2px];
+}
+
+/* Table Grid Item - Professional */
+.table-card {
+  @apply rounded-lg border-2 p-6 transition-all duration-200 cursor-pointer group font-semibold text-center;
+}
+
+.table-card:hover {
+  @apply cloud-shadow-hover translate-y-[-4px];
+}
+
+/* Badge Styles - Professional */
+.badge-success {
+  @apply inline-flex items-center px-3 py-1 bg-emerald-100 text-emerald-800 font-semibold rounded-full text-xs;
+}
+
+.badge-warning {
+  @apply inline-flex items-center px-3 py-1 bg-amber-100 text-amber-800 font-semibold rounded-full text-xs;
+}
+
+.badge-danger {
+  @apply inline-flex items-center px-3 py-1 bg-red-100 text-red-800 font-semibold rounded-full text-xs;
+}
+
+.badge-info {
+  @apply inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 font-semibold rounded-full text-xs;
+}
+
+/* Input Styles - Professional */
+.input-light {
+  @apply w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all outline-none;
+}
+
+/* Modal Overlay - Professional */
+.modal-overlay {
+  @apply fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex items-center justify-center z-50;
+}
+
+.modal-content {
+  @apply bg-white rounded-lg card-shadow p-8 max-w-lg w-full mx-4;
+}
+
+/* Professional Color Palette */
+:root {
+  --color-primary-blue: #2563eb;
+  --color-primary-slate: #475569;
+  --color-accent-red: #dc2626;
+  --color-success-emerald: #059669;
+  --color-warning-amber: #d97706;
+  --color-bg-light: #f8fafc;
+  --color-text-dark: #0f172a;
+}
