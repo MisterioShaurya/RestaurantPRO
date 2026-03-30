@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useOfflineMode } from '@/hooks/use-offline-mode'
 
 interface Stats {
   totalOrders: number
@@ -23,8 +22,6 @@ interface Order {
 
 export default function DashboardHome({ user }: { user: any }) {
   const router = useRouter()
-  const offlineMode = useOfflineMode()
-  const [userRole, setUserRole] = useState<string | null>(null)
   const [stats, setStats] = useState<Stats>({
     totalOrders: 0,
     totalRevenue: 0,
@@ -34,19 +31,8 @@ export default function DashboardHome({ user }: { user: any }) {
   const [recentOrders, setRecentOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Get role from cookie
-  useEffect(() => {
-    const role = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('userRole='))
-      ?.split('=')[1]
-    setUserRole(role || 'admin')
-  }, [])
-
   // Fetch combined stats and orders on mount and periodically
   useEffect(() => {
-    if (userRole !== 'admin') return
-
     const fetchCombined = async () => {
       try {
         const res = await fetch('/api/dashboard/combined')
@@ -54,13 +40,9 @@ export default function DashboardHome({ user }: { user: any }) {
           const data = await res.json()
           setStats(data.stats)
           setRecentOrders(data.recentOrders.reverse())
-          offlineMode.setDatabaseConnected(true)
-        } else {
-          offlineMode.setDatabaseConnected(false)
         }
       } catch (err) {
         console.log('[Dashboard] Error fetching combined data:', err)
-        offlineMode.setDatabaseConnected(false)
       } finally {
         setLoading(false)
       }
@@ -70,70 +52,12 @@ export default function DashboardHome({ user }: { user: any }) {
     // Refresh every 5 seconds (single combined request instead of 2 separate ones)
     const interval = setInterval(fetchCombined, 5000)
     return () => clearInterval(interval)
-  }, [userRole, offlineMode])
-
-  // Redirect counter role to tables page
-  useEffect(() => {
-    if (userRole === 'counter') {
-      router.push('/dashboard/tables')
-    }
-  }, [userRole, router])
-
-  // Chef view - show only kitchen-related items
-  if (userRole === 'chef') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-red-50 p-4 sm:p-6 lg:p-8">
-        {/* Header */}
-        <div className="mb-8 animate-slide-up">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">👨‍🍳 Welcome, {user?.name || 'Chef'}!</h1>
-          <p className="text-lg text-gray-600">Kitchen operations and order management</p>
-        </div>
-
-        {/* Kitchen Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <button
-            onClick={() => router.push('/dashboard/kitchen')}
-            className="group relative overflow-hidden bg-white rounded-2xl p-8 card-shadow hover:card-shadow-hover transition-all duration-300 hover:translate-y-[-4px]"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-orange-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="relative text-center">
-              <div className="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">🔥</div>
-              <p className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-orange-600 transition-colors">Kitchen Display</p>
-              <p className="text-gray-600 group-hover:text-gray-700">View incoming orders and manage queue</p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => router.push('/dashboard/order-logs')}
-            className="group relative overflow-hidden bg-white rounded-2xl p-8 card-shadow hover:card-shadow-hover transition-all duration-300 hover:translate-y-[-4px]"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-emerald-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="relative text-center">
-              <div className="text-6xl mb-4 group-hover:scale-110 transition-transform duration-300">🧾</div>
-              <p className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-green-600 transition-colors">KOT Logs</p>
-              <p className="text-gray-600 group-hover:text-gray-700">View past orders and history</p>
-            </div>
-          </button>
-        </div>
-
-        {/* Chef Info Banner */}
-        <div className="bg-gradient-to-r from-orange-100 to-amber-100 border-l-4 border-orange-500 rounded-lg p-6">
-          <p className="text-sm font-semibold text-orange-900">🔔 Kitchen Role Active</p>
-          <p className="text-sm text-orange-800 mt-2">You have access to kitchen-specific features. New orders appear automatically in the Kitchen Display.</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Counter/POS view - return null while redirecting
-  if (userRole === 'counter') {
-    return null
-  }
+  }, [])
 
   // Admin view - show all
   const statCards = [
     { label: 'Total Orders', value: stats.totalOrders, icon: '📋', color: 'from-teal-500 to-teal-600', bgColor: 'bg-teal-50' },
-    { label: 'Revenue Today', value: `$${stats.totalRevenue}`, icon: '💵', color: 'from-green-500 to-green-600', bgColor: 'bg-green-50' },
+    { label: 'Revenue Today', value: `₹${stats.totalRevenue}`, icon: '💵', color: 'from-green-500 to-green-600', bgColor: 'bg-green-50' },
     { label: 'Active Orders', value: stats.activeOrders, icon: '⏱️', color: 'from-orange-500 to-orange-600', bgColor: 'bg-orange-50' },
     { label: 'Table Occupancy', value: `${stats.tableOccupancy}%`, icon: '🍽️', color: 'from-rose-500 to-rose-600', bgColor: 'bg-rose-50' },
   ]
@@ -228,7 +152,7 @@ export default function DashboardHome({ user }: { user: any }) {
                         order.status === 'preparing' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-gray-100 text-gray-800'
                       }`}>
-                        {order.status === 'completed' ? '✓ Completed' :
+                        {order.status === 'completed' ? '💰 Paid' :
                          order.status === 'ready' ? '🟢 Ready' :
                          order.status === 'preparing' ? '⏳ Preparing' :
                          '⏸️ Pending'}

@@ -1,0 +1,47 @@
+[
+  {
+    "_id": "69cae935faa9b4696fad1e03",
+    "restaurantId": "69cacc0d0444d0445a480b51",
+    "number": 1,
+    "capacity": 2,
+    "status": "available",
+    "isDefault": false,
+    "createdAt": "2026-03-30T21:20:53.081Z"
+  },
+  {
+    "_id": "69cae935faa9b4696fad1e04",
+    "restaurantId": "69cacc0d0444d0445a480b51",
+    "number": 2,
+    "capacity": 2,
+    "status": "available",
+    "isDefault": false,
+    "createdAt": "2026-03-30T21:20:53.525Z"
+  },
+  {
+    "_id": "69cae935faa9b4696fad1e05",
+    "restaurantId": "69cacc0d0444d0445a480b51",
+    "number": 3,
+    "capacity": 2,
+    "status": "available",
+    "isDefault": false,
+    "createdAt": "2026-03-30T21:20:53.791Z"
+  },
+  {
+    "_id": "69cae936faa9b4696fad1e06",
+    "restaurantId": "69cacc0d0444d0445a480b51",
+    "number": 4,
+    "capacity": 2,
+    "status": "available",
+    "isDefault": false,
+    "createdAt": "2026-03-30T21:20:54.021Z"
+  },
+  {
+    "_id": "69cae936faa9b4696fad1e07",
+    "restaurantId": "69cacc0d0444d0445a480b51",
+    "number": 5,
+    "capacity": 2,
+    "status": "available",
+    "isDefault": false,
+    "createdAt": "2026-03-30T21:20:54.247Z"
+  }
+]

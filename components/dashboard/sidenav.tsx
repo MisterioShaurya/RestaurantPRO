@@ -36,7 +36,6 @@ export default function SideNav({ isOpen, onToggle }: SideNavProps) {
     { label: 'Reservations', href: '/dashboard/reservations', icon: '📅', color: 'rose' },
     { label: 'KOT Logs', href: '/dashboard/order-logs', icon: '🧾', color: 'teal' },
     { label: 'Analytics', href: '/dashboard/analytics', icon: '📈', color: 'lime' },
-    { label: 'User Management', href: '/dashboard/users', icon: '👤', color: 'indigo' },
     { label: 'Integrations', href: '/dashboard/integrations', icon: '🔌', color: 'purple' },
     { label: 'Contact Us', href: '/dashboard/contact', icon: '📞', color: 'blue' },
   ]

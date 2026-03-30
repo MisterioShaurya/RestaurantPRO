@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
     // Try to fetch from database to update stats
     try {
       const client = await getMongoClient()
-      const db = client.db('restaurant_pro')
+      const db = client.db('restaurant_pos')
       const today = new Date()
       today.setHours(0, 0, 0, 0)
 

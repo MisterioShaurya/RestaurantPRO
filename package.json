@@ -37,7 +37,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "publisherName": "RestaurantPRO"
@@ -91,6 +93,7 @@
     "date-fns": "4.1.0",
     "electron-is-dev": "^3.0.1",
     "embla-carousel-react": "8.5.1",
+    "framer-motion": "^12.38.0",
     "gcp-metadata": "latest",
     "input-otp": "1.4.1",
     "jsonwebtoken": "latest",

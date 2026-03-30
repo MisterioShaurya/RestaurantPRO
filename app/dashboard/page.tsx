@@ -2,8 +2,6 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { persistentUserStorage } from '@/lib/persistent-user-storage'
-import { useOfflineMode } from '@/hooks/use-offline-mode'
 import SideNav from '@/components/dashboard/sidenav'
 import DashboardHeader from '@/components/dashboard/header'
 import DashboardHome from '@/components/dashboard/home'
@@ -14,7 +12,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const hasCheckedAuth = useRef(false)
-  const { isOnline } = useOfflineMode()
 
   useEffect(() => {
     // Prevent multiple auth checks
@@ -24,30 +21,34 @@ export default function DashboardPage() {
       hasCheckedAuth.current = true
 
       try {
-        // First check local storage (offline-first)
-        const localUser = persistentUserStorage.getCurrentUser()
-        const isLocked = persistentUserStorage.isLocked()
-
-        if (isLocked) {
-          console.log('[Dashboard] System locked, redirecting to login')
+        // Check if user is authenticated via JWT token
+        const token = localStorage.getItem('token')
+        if (!token) {
+          console.log('[Dashboard] No token found, redirecting to login')
           router.push('/login')
           return
         }
 
-        if (!localUser) {
-          console.log('[Dashboard] No local user found, redirecting to login')
+        // Verify token with server
+        const response = await fetch('/api/auth/verify', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (!response.ok) {
+          console.log('[Dashboard] Token invalid, redirecting to login')
+          localStorage.removeItem('token')
           router.push('/login')
           return
         }
 
-        // Set user from local storage
-        setUser(localUser)
-
-        // Skip server sync for now to prevent API call issues
-        console.log('[Dashboard] Using local user data')
+        const userData = await response.json()
+        setUser(userData.user)
 
       } catch (error) {
         console.error('[Dashboard] Auth check error:', error)
+        localStorage.removeItem('token')
         router.push('/login')
       } finally {
         setLoading(false)

@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; email: string }
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
     const user = await db.collection('users').findOne({ _id: new ObjectId(decoded.userId) })
 
     if (!user) {

@@ -235,28 +235,6 @@ export default function OrderLogsPage() {
                     </p>
                   </div>
                   <div className="ml-4 flex items-center gap-2">
-                    {!isOrderCancelled(log) && (
-                      <button
-                        onClick={() => toggleOrderDone(log.id)}
-                        className={`px-4 py-2 font-semibold rounded-lg transition flex items-center gap-2 whitespace-nowrap ${
-                          log.isDone
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                            : 'bg-slate-200 hover:bg-slate-300 text-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-white'
-                        }`}
-                      >
-                        {log.isDone ? (
-                          <>
-                            <CheckCircle2 size={18} />
-                            Done
-                          </>
-                        ) : (
-                          <>
-                            <Circle size={18} />
-                            Mark Done
-                          </>
-                        )}
-                      </button>
-                    )}
                     <button className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-lg transition flex items-center gap-2 whitespace-nowrap">
                       <Printer size={18} />
                       Print

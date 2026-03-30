@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMongoClient } from '@/lib/mongodb'
+import { getRestaurantIdFromRequest } from '@/lib/get-restaurant-id'
 import fs from 'fs'
 import path from 'path'
 
@@ -23,8 +24,14 @@ function writeInventoryToFile(items: any[]) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const restaurantId = await getRestaurantIdFromRequest(req)
+    
+    if (!restaurantId) {
+      return NextResponse.json({ items: [] })
+    }
+
     // Try to read from JSON file first (for offline support)
     let items = readInventoryFromFile()
 
@@ -32,8 +39,8 @@ export async function GET() {
     if (!items || items.length === 0) {
       try {
         const client = await getMongoClient()
-        const db = client.db('restaurant_pro')
-        items = await db.collection('inventory').find().toArray()
+        const db = client.db('restaurant_pos')
+        items = await db.collection('inventory').find({ restaurantId }).toArray()
         writeInventoryToFile(items)
       } catch (dbError) {
         console.error('[Inventory] Database error:', dbError)
@@ -50,11 +57,18 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const restaurantId = await getRestaurantIdFromRequest(req)
+    
+    if (!restaurantId) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    }
+
     const data = await req.json()
     
     const newItem = {
       _id: Date.now().toString(),
       ...data,
+      restaurantId,
       createdAt: new Date(),
     }
 
@@ -66,7 +80,7 @@ export async function POST(req: NextRequest) {
     // Try to sync with database
     try {
       const client = await getMongoClient()
-      const db = client.db('restaurant_pro')
+      const db = client.db('restaurant_pos')
       const result = await db.collection('inventory').insertOne(newItem)
       newItem._id = result.insertedId.toString()
       items[items.length - 1] = newItem

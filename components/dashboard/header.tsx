@@ -1,16 +1,11 @@
 'use client'
 
-import { useOfflineMode } from '@/hooks/use-offline-mode'
-import { StatusIndicator } from '@/components/status-indicator'
-
 interface DashboardHeaderProps {
   user: any
   onMenuToggle: () => void
 }
 
 export default function DashboardHeader({ user, onMenuToggle }: DashboardHeaderProps) {
-  const offlineMode = useOfflineMode()
-
   return (
     <header className="sticky top-0 z-20 bg-gradient-to-r from-white to-gray-50 border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4 card-shadow">
       <div className="flex items-center justify-between gap-4">
@@ -27,16 +22,6 @@ export default function DashboardHeader({ user, onMenuToggle }: DashboardHeaderP
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Status Indicator */}
-          <StatusIndicator
-            isOnline={offlineMode.isOnline}
-            isManualOffline={offlineMode.isManualOffline}
-            isDatabaseConnected={offlineMode.isDatabaseConnected}
-            isSyncing={offlineMode.isSyncing}
-            syncProgress={offlineMode.syncProgress}
-            onToggleOfflineMode={offlineMode.setManualOfflineMode}
-          />
-
           <div className="hidden sm:block text-right">
             <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
             <p className="text-xs text-gray-600">{user?.email}</p>

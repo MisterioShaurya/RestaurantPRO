@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     const tableNumber = url.searchParams.get('tableNumber')
 
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
 
     const query: any = {}
     if (tableNumber) query.tableNumber = Number(tableNumber)
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
 
     const result = await db.collection('preorders').insertOne({
       tableNumber: Number(tableNumber),

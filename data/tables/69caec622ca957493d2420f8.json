@@ -1,0 +1,11 @@
+[
+  {
+    "_id": "69caf5ff2ca957493d24210b",
+    "restaurantId": "69caec622ca957493d2420f8",
+    "number": 1,
+    "capacity": 2,
+    "status": "available",
+    "isDefault": false,
+    "createdAt": "2026-03-30T22:15:27.514Z"
+  }
+]

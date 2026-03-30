@@ -18,17 +18,68 @@ export default function OrdersPage() {
     setSelectedOrder(null)
   }
 
-  const loadOrders = () => {
-    const allOrders = localOrderManager.getAllOrders()
-    // Sort by newest first
-    const sorted = [...allOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    setOrders(sorted)
+  const loadOrders = async () => {
+    try {
+      // Fetch from database
+      const res = await fetch('/api/orders')
+      if (res.ok) {
+        const data = await res.json()
+        const dbOrders = data.orders || []
+        // Sort by newest first
+        const sorted = [...dbOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        setOrders(sorted)
+      }
+    } catch (err) {
+      console.log('Error fetching orders from database:', err)
+      // Fallback to localStorage
+      const allOrders = localOrderManager.getAllOrders()
+      const sorted = [...allOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      setOrders(sorted)
+    }
   }
 
   useEffect(() => {
     loadOrders()
   }, [])
 
+
+  const exportToExcel = () => {
+    const dataToExport = filteredOrders.map(order => ({
+      'Order #': order.number,
+      'Table': order.tableNumber ? `Table ${order.tableNumber}` : 'Walk-in',
+      'Items': order.items.map(item => `${item.name} (${item.qty}x)`).join(', '),
+      'Total': order.total.toFixed(2),
+      'Status': order.status.toUpperCase(),
+      'Time': new Date(order.createdAt).toLocaleString(),
+      'Customer': order.customerName || 'N/A'
+    }))
+
+    // Convert to CSV
+    const headers = Object.keys(dataToExport[0])
+    const csvContent = [
+      headers.join(','),
+      ...dataToExport.map(row => 
+        headers.map(header => {
+          const value = row[header as keyof typeof row]
+          // Escape commas and quotes in CSV
+          return typeof value === 'string' && (value.includes(',') || value.includes('"'))
+            ? `"${value.replace(/"/g, '""')}"`
+            : value
+        }).join(',')
+      )
+    ].join('\n')
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `orders_export_${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   const filteredOrders =
     filterStatus === 'all' ? orders : orders.filter((o) => o.status === filterStatus)
@@ -49,6 +100,12 @@ export default function OrdersPage() {
             <p className="text-lg text-slate-600 dark:text-slate-300">View and manage all restaurant orders</p>
           </div>
         </div>
+        <button
+          onClick={exportToExcel}
+          className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition shadow-md flex items-center gap-2"
+        >
+          📥 Export to Excel
+        </button>
       </div>
 
       {/* Filter Buttons */}

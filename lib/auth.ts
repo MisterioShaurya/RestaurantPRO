@@ -4,8 +4,10 @@ import { jwtDecode } from 'jwt-decode'
 export interface DecodedToken {
   userId: string
   email: string
-  role: 'admin' | 'counter' | 'chef'
+  username: string
   restaurantName: string
+  restaurantId: string
+  isAdmin: boolean
   iat: number
   exp: number
 }
@@ -56,12 +58,12 @@ export function getClientSession() {
   }
 }
 
-export function requireRole(...allowedRoles: Array<'admin' | 'counter' | 'chef'>) {
+export function requireAdmin() {
   return async function middleware() {
     const session = await getServerSession()
     
-    if (!session || !allowedRoles.includes(session.role)) {
-      throw new Error('Unauthorized')
+    if (!session || !session.isAdmin) {
+      throw new Error('Unauthorized - Admin access required')
     }
 
     return session

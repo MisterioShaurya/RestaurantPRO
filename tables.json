@@ -1,14 +1,86 @@
 [
-  { "_id": "1", "number": 1, "capacity": 2, "status": "available" },
-  { "_id": "2", "number": 2, "capacity": 2, "status": "available" },
-  { "_id": "3", "number": 3, "capacity": 2, "status": "available" },
-  { "_id": "4", "number": 4, "capacity": 2, "status": "available" },
-  { "_id": "5", "number": 5, "capacity": 4, "status": "available" },
-  { "_id": "6", "number": 6, "capacity": 4, "status": "available" },
-  { "_id": "7", "number": 7, "capacity": 4, "status": "available" },
-  { "_id": "8", "number": 8, "capacity": 4, "status": "available" },
-  { "_id": "9", "number": 9, "capacity": 6, "status": "available" },
-  { "_id": "10", "number": 10, "capacity": 6, "status": "available" },
-  { "_id": "11", "number": 11, "capacity": 6, "status": "available" },
-  { "_id": "12", "number": 12, "capacity": 6, "status": "available" }
+  {
+    "_id": "2",
+    "number": 2,
+    "capacity": 2,
+    "status": "available",
+    "tableName": "vip table hu"
+  },
+  {
+    "_id": "3",
+    "number": 3,
+    "capacity": 2,
+    "status": "available"
+  },
+  {
+    "_id": "4",
+    "number": 4,
+    "capacity": 2,
+    "status": "available"
+  },
+  {
+    "_id": "5",
+    "number": 5,
+    "capacity": 4,
+    "status": "available"
+  },
+  {
+    "_id": "6",
+    "number": 6,
+    "capacity": 4,
+    "status": "available"
+  },
+  {
+    "_id": "7",
+    "number": 7,
+    "capacity": 4,
+    "status": "available"
+  },
+  {
+    "_id": "8",
+    "number": 8,
+    "capacity": 4,
+    "status": "available"
+  },
+  {
+    "_id": "9",
+    "number": 9,
+    "capacity": 6,
+    "status": "available"
+  },
+  {
+    "_id": "10",
+    "number": 10,
+    "capacity": 6,
+    "status": "available"
+  },
+  {
+    "_id": "11",
+    "number": 11,
+    "capacity": 6,
+    "status": "available"
+  },
+  {
+    "_id": "12",
+    "number": 12,
+    "capacity": 6,
+    "status": "available"
+  },
+  {
+    "_id": "69c988cd85c465a7d1ad0f7f",
+    "number": 1,
+    "capacity": 2,
+    "status": "available",
+    "createdAt": "2026-03-29T20:17:17.608Z"
+  },
+  {
+    "_id": "69cad23a0444d0445a480b6d",
+    "restaurantId": "69cacc0d0444d0445a480b51",
+    "number": 14,
+    "capacity": 10,
+    "status": "available",
+    "isDefault": false,
+    "createdAt": "2026-03-30T19:42:48.611Z",
+    "tableName": "vip table number 2 hu"
+  }
 ]

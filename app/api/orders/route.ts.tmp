@@ -118,7 +118,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   try {
     const { status } = await req.json()
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
 
     const result = await db.collection('orders').findOneAndUpdate(
       { _id: new ObjectId(params.id) },
@@ -143,7 +143,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
     await db.collection('orders').deleteOne({ _id: new ObjectId(params.id) })
     return NextResponse.json({ success: true })
   } catch (error) {

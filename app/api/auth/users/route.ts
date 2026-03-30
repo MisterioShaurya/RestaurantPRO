@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     }
 
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
     const users = db.collection('users')
 
     // Find all users with this email (should be one, but get the admin first if exists)

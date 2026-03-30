@@ -2,18 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Plus, Minus, Check, ChefHat, Trash2, Settings2, Search, Printer, Pause, LogOut } from 'lucide-react'
+import { X, Plus, Check, ChefHat, Trash2, Settings, Search, Printer, LogOut, Edit2 } from 'lucide-react'
 import { orderService } from '@/lib/order-service'
-import { localOrderManager, LocalOrder } from '@/lib/local-order-manager'
-import { persistentUserStorage } from '@/lib/persistent-user-storage'
-import { offlineSyncManager } from '@/lib/offline-sync'
-import { useOfflineMode } from '@/hooks/use-offline-mode'
-
 interface Table {
   _id: string
   number: number
   capacity: number
   status: 'available' | 'occupied' | 'on-hold'
+  isDefault?: boolean
+  tableName?: string
 }
 
 interface MenuItem {
@@ -53,7 +50,6 @@ interface TableOrderState {
 
 export default function TablesPage() {
   const router = useRouter()
-  const offlineMode = useOfflineMode()
   const [tables, setTables] = useState<Table[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
@@ -71,21 +67,75 @@ export default function TablesPage() {
   const [showKotPrintModal, setShowKotPrintModal] = useState(false)
   const [newTableNum, setNewTableNum] = useState<number>(0)
   const [newTableCapacity, setNewTableCapacity] = useState<number>(2)
+  const [newTableName, setNewTableName] = useState<string>('')
   const [paymentMode, setPaymentMode] = useState<string>('cash')
+  const [splitPaymentMode, setSplitPaymentMode] = useState<boolean>(false)
+  const [splitPayments, setSplitPayments] = useState<{mode: string, amount: number}[]>([
+    { mode: 'cash', amount: 0 },
+    { mode: 'upi', amount: 0 }
+  ])
   const [discount, setDiscount] = useState<number>(0)
   const [roundOff, setRoundOff] = useState<number>(0)
   const [customerName, setCustomerName] = useState<string>('')
   const [customerPhone, setCustomerPhone] = useState<string>('')
   const [kotPrintContent, setKotPrintContent] = useState<{ items: OrderItem[]; table: string } | null>(null)
+  const [editingTable, setEditingTable] = useState<Table | null>(null)
+  const [editTableName, setEditTableName] = useState<string>('')
   
   // Resizable section widths (modal only)
   const [menuWidth, setMenuWidth] = useState(50)  // percentage of modal
   const [cartWidth, setCartWidth] = useState(50)  // percentage of modal
 
+  // Derived state - moved before useEffect to fix temporal dead zone error
+  const currentCart = selectedWalkInId !== null
+    ? walkInOrders[selectedWalkInId]?.items || []
+    : selectedTable
+    ? tableOrders[selectedTable._id]?.items || []
+    : []
+
+  const currentOrderState = selectedWalkInId !== null
+    ? walkInOrders[selectedWalkInId]
+    : selectedTable
+    ? tableOrders[selectedTable._id]
+    : null
+
+  // Keyboard shortcuts
   useEffect(() => {
-    loadLocalTables()
-    loadLocalMenu()
-  }, [])
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle shortcuts when billing modal is open
+      if (!showBillingModal) return
+
+      // Ctrl+P or Cmd+P for Print KOT
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault()
+        if (currentCart.length > 0) {
+          sendToKOT()
+        }
+      }
+
+      // Ctrl+Enter for Complete & Pay
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault()
+        if (currentOrderState?.billItems && currentOrderState.billItems.length > 0) {
+          completeAndPay()
+        }
+      }
+
+      // Ctrl+H for Hold Order
+      if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+        e.preventDefault()
+        handleHoldOrder()
+      }
+
+      // Escape to close modal
+      if (e.key === 'Escape') {
+        handleCloseModal()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showBillingModal, currentCart, currentOrderState])
 
 
 
@@ -112,43 +162,27 @@ export default function TablesPage() {
     document.addEventListener('mouseup', handleMouseUp)
   }
 
-  // Load tables from local storage
-  const loadLocalTables = () => {
+  // Load tables from API
+  const loadLocalTables = async () => {
     try {
-      const storedTables = persistentUserStorage.getTables()
-      if (storedTables && storedTables.length > 0) {
-        setTables(storedTables.map((t: any, i: number) => ({
-          _id: t.id || `table-${i}`,
-          number: t.number || i + 1,
-          capacity: t.capacity || 4,
-          status: t.status || 'available' as const,
-        })))
+      const res = await fetch('/api/tables')
+      if (res.ok) {
+        const data = await res.json()
+        const tablesData = (data.tables || data || []) as Table[]
+        setTables(tablesData)
       } else {
-        // Default: create 5 demo tables if none exist
-        const demoTables = Array.from({ length: 5 }, (_, i) => ({
-          _id: `table-${i}`,
-          number: i + 1,
-          capacity: 4,
-          status: 'available' as const,
-        }))
-        setTables(demoTables)
+        throw new Error('Failed to fetch tables')
       }
     } catch (err) {
-      console.log('Error loading tables:', err)
-      // Fallback: create demo tables
-      const demoTables = Array.from({ length: 5 }, (_, i) => ({
-        _id: `table-${i}`,
-        number: i + 1,
-        capacity: 4,
-        status: 'available' as const,
-      }))
-      setTables(demoTables)
+      console.error('[Tables] Error loading tables:', err)
+      // Show error to user
+      alert('Failed to load tables. Please check your connection.')
     } finally {
       setLoading(false)
     }
   }
 
-  // Load menu from API (which uses JSON file for offline)
+  // Load menu from API
   const loadLocalMenu = async () => {
     try {
       const res = await fetch('/api/menu')
@@ -159,24 +193,34 @@ export default function TablesPage() {
         const cats = [...new Set(items.map((item: MenuItem) => item.category))] as string[]
         setCategories(cats)
         if (cats.length > 0) setSelectedCategory(cats[0])
-        offlineMode.setDatabaseConnected(true)
       } else {
         throw new Error('Failed to fetch menu')
       }
     } catch (err) {
-      console.log('[Tables] Error loading menu:', err)
-      offlineMode.setDatabaseConnected(false)
-      // No fallback - menu will be empty if API fails
+      console.error('[Tables] Error loading menu:', err)
+      // Show error to user
+      alert('Failed to load menu. Please check your connection.')
       setMenuItems([])
       setCategories([])
     }
   }
 
-  const updateTableStatus = (tableId: string, status: string) => {
-    // Update local state only (offline-first)
+  const updateTableStatus = async (tableId: string, status: string) => {
+    // Update local state
     setTables((prev) =>
       prev.map((t) => (t._id === tableId ? { ...t, status: status as any } : t))
     )
+    
+    // Sync to database
+    try {
+      await fetch('/api/tables', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tableId, status })
+      })
+    } catch (err) {
+      console.error('Failed to update table status:', err)
+    }
   }
 
   const handleTableClick = (table: Table) => {
@@ -410,7 +454,7 @@ export default function TablesPage() {
       if (!orderId) {
         // First time sending - create new order with KOT
         const subtotal = itemsToSend.reduce((sum, item) => sum + item.price * item.qty, 0)
-        const { order, kot } = orderService.createOrderWithKOT({
+        const { order, kot } = await orderService.createOrderWithKOT({
           tableNumber: isWalkIn ? undefined : selectedTable?.number,
           customerName: customerName || undefined,
           items: itemsToSend,
@@ -423,7 +467,7 @@ export default function TablesPage() {
         kotData = kot
       } else {
         // Sending additional items - create new KOT with only new items
-        kotData = orderService.sendAdditionalItemsToKOT(orderId, itemsToSend)
+        kotData = await orderService.sendAdditionalItemsToKOT(orderId, itemsToSend)
       }
 
       const kotLog: KOTLog = {
@@ -570,53 +614,55 @@ export default function TablesPage() {
         ...(customerPhone && { customerPhone }),
       }
 
-      // Mark as syncing
-      offlineMode.setSyncing(true, 0)
+      // Submit bill to server
+      const res = await fetch('/api/billing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(billData),
+      })
 
-      // Try to submit bill to server
-      let uploadedToServer = false
-      try {
-        const res = await fetch('/api/billing', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(billData),
-        })
-
-        if (res.ok) {
-          console.log('[Tables] Bill submitted successfully to server')
-          uploadedToServer = true
-          offlineMode.setDatabaseConnected(true)
-          offlineMode.setSyncing(false, 100)
-        } else {
-          // If server is unavailable, queue for later sync
-          console.log('[Tables] Server unavailable (status:', res.status, '), queuing bill for sync')
-          offlineMode.setDatabaseConnected(false)
-          await offlineSyncManager.addToSyncQueue({
-            type: 'bill',
-            action: 'create',
-            endpoint: '/api/billing',
-            data: billData,
-            timestamp: Date.now(),
-            maxRetries: 5,
-          })
-          offlineMode.setSyncing(false, 50)
-        }
-      } catch (fetchErr) {
-        // Network error - queue for sync
-        console.log('[Tables] Network error, queuing bill for sync:', fetchErr)
-        offlineMode.setDatabaseConnected(false)
-        await offlineSyncManager.addToSyncQueue({
-          type: 'bill',
-          action: 'create',
-          endpoint: '/api/billing',
-          data: billData,
-          timestamp: Date.now(),
-          maxRetries: 5,
-        })
-        offlineMode.setSyncing(false, 50)
+      if (!res.ok) {
+        throw new Error('Failed to submit bill')
       }
 
-      // Always print bill locally (offline-first approach)
+      console.log('[Tables] Bill submitted successfully to server')
+
+      // Save order to database for orders page
+      const orderData = {
+        id: `order-${Date.now()}`,
+        tableNumber: isWalkIn ? null : selectedTable?.number,
+        customerName: customerName || (isWalkIn ? 'Walk-in' : `Table ${selectedTable?.number}`),
+        items: items.map(item => ({
+          id: item._id,
+          name: item.name,
+          qty: item.qty,
+          price: item.price,
+        })),
+        subtotal,
+        tax,
+        discount,
+        total,
+        paymentMode,
+        status: 'completed',
+        createdAt: new Date().toISOString(),
+      }
+
+      await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderData),
+      })
+
+      // Update order status to paid if exists
+      if (orderState?.orderId) {
+        await fetch('/api/orders', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: orderState.orderId, status: 'completed' }),
+        })
+      }
+
+      // Print bill
       printBill({
         items,
         subtotal,
@@ -629,22 +675,6 @@ export default function TablesPage() {
         customerName,
         customerPhone,
       })
-
-      // Queue bill for printing if offline
-      if (!offlineMode.isEffectivelyOnline || !uploadedToServer) {
-        await offlineSyncManager.addToPrintQueue('bill', {
-          items,
-          subtotal,
-          discount,
-          tax,
-          roundOff,
-          total,
-          paymentMode,
-          tableNumber: isWalkIn ? null : selectedTable?.number,
-          customerName,
-          customerPhone,
-        })
-      }
 
       // Clear order and reset table to available
       if (isWalkIn) {
@@ -676,102 +706,10 @@ export default function TablesPage() {
       setSelectedTable(null)
       setSelectedWalkInId(null)
       
-      const message = uploadedToServer 
-        ? 'Payment completed and synced!' 
-        : 'Payment completed locally. Will sync when online.';
-      alert(message)
+      alert('Payment completed successfully!')
     } catch (err) {
-      console.log('[Tables] Error completing payment:', err)
-      offlineMode.setSyncing(false, 0)
-      alert('Payment completed locally. Will sync when online.')
-      
-      // Even on error, complete the local operation
-      const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0)
-      const afterDiscount = subtotal - discount
-      const tax = afterDiscount * 0.1
-      const beforeRoundOff = afterDiscount + tax
-      const total = beforeRoundOff + roundOff
-
-      const billData = {
-        tableNumber: isWalkIn ? null : selectedTable?.number,
-        items: items,
-        subtotal,
-        discount,
-        tax,
-        roundOff,
-        total,
-        paymentMode,
-        status: 'completed',
-        ...(customerName && { customerName }),
-        ...(customerPhone && { customerPhone }),
-      }
-
-      // Queue for sync
-      await offlineSyncManager.addToSyncQueue({
-        type: 'bill',
-        action: 'create',
-        endpoint: '/api/billing',
-        data: billData,
-        timestamp: Date.now(),
-        maxRetries: 5,
-      })
-
-      // Print and clear local state
-      printBill({
-        items,
-        subtotal,
-        discount,
-        tax,
-        roundOff,
-        total,
-        paymentMode,
-        tableNumber: isWalkIn ? null : selectedTable?.number,
-        customerName,
-        customerPhone,
-      })
-
-      // Queue bill for printing
-      await offlineSyncManager.addToPrintQueue('bill', {
-        items,
-        subtotal,
-        discount,
-        tax,
-        roundOff,
-        total,
-        paymentMode,
-        tableNumber: isWalkIn ? null : selectedTable?.number,
-        customerName,
-        customerPhone,
-      })
-
-      if (isWalkIn) {
-        const newWalkInOrders = { ...walkInOrders }
-        delete newWalkInOrders[tableId]
-        setWalkInOrders(newWalkInOrders)
-      } else {
-        setTableOrders({
-          ...tableOrders,
-          [tableId]: {
-            items: [],
-            kotSent: false,
-            firstKotDone: false,
-            billItems: [],
-            onHold: false,
-          },
-        })
-        if (selectedTable) {
-          updateTableStatus(selectedTable._id, 'available')
-        }
-      }
-      setShowPaymentModal(false)
-      setShowBillingModal(false)
-      setPaymentMode('cash')
-      setDiscount(0)
-      setRoundOff(0)
-      setCustomerName('')
-      setCustomerPhone('')
-      setSelectedTable(null)
-      setSelectedWalkInId(null)
+      console.error('[Tables] Error completing payment:', err)
+      alert('Failed to complete payment. Please check your connection.')
     }
   }
 
@@ -844,6 +782,7 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
         body: JSON.stringify({
           number: newTableNum,
           capacity: newTableCapacity,
+          tableName: newTableName || `Table ${newTableNum}`,
         }),
       })
 
@@ -852,6 +791,7 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
         setTables([...tables, data.table])
         setNewTableNum(0)
         setNewTableCapacity(2)
+        setNewTableName('')
         setShowTableForm(false)
         alert('Table created successfully!')
       }
@@ -862,6 +802,14 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
   }
 
   const deleteTable = async (tableId: string) => {
+    const table = tables.find(t => t._id === tableId)
+    
+    // Prevent deleting default tables
+    if (table?.isDefault) {
+      alert('Cannot delete default tables. Default tables are permanent and cannot be removed.')
+      return
+    }
+
     if (!confirm('Are you sure you want to delete this table?')) return
 
     try {
@@ -879,6 +827,48 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
     }
   }
 
+  const editTable = (table: Table) => {
+    setEditingTable(table)
+    setEditTableName(table.tableName || `Table ${table.number}`)
+  }
+
+  const saveTableName = async () => {
+    if (!editingTable || !editTableName.trim()) {
+      alert('Please enter a valid table name')
+      return
+    }
+
+    try {
+      const res = await fetch('/api/tables', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableId: editingTable._id,
+          tableName: editTableName.trim()
+        })
+      })
+
+      if (res.ok) {
+        setTables(tables.map(t => 
+          t._id === editingTable._id 
+            ? { ...t, tableName: editTableName.trim() }
+            : t
+        ))
+        setEditingTable(null)
+        setEditTableName('')
+        alert('Table name updated successfully!')
+      }
+    } catch (err) {
+      console.log('Error updating table name:', err)
+      alert('Failed to update table name')
+    }
+  }
+
+  const cancelEdit = () => {
+    setEditingTable(null)
+    setEditTableName('')
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'occupied':
@@ -891,18 +881,6 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
         return 'from-gray-400 to-gray-600'
     }
   }
-
-  const currentCart = selectedWalkInId !== null
-    ? walkInOrders[selectedWalkInId]?.items || []
-    : selectedTable
-    ? tableOrders[selectedTable._id]?.items || []
-    : []
-
-  const currentOrderState = selectedWalkInId !== null
-    ? walkInOrders[selectedWalkInId]
-    : selectedTable
-    ? tableOrders[selectedTable._id]
-    : null
 
   const filteredMenuItems = menuItems.filter((item) => {
     const matchesCategory = !selectedCategory || item.category === selectedCategory
@@ -937,7 +915,7 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
                 onClick={() => setShowTableForm(!showTableForm)}
                 className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg flex items-center gap-2 transition shadow-md active:scale-95"
               >
-                <Settings2 size={20} />
+                <Settings size={20} />
                 <span>Manage Tables</span>
               </button>
             </div>
@@ -945,28 +923,45 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
             {/* Add/Delete Tables Form */}
             {showTableForm && (
               <div className="bg-white p-4 rounded-lg border border-gray-300">
-                <div className="flex gap-3 mb-3">
-                  <input
-                    type="number"
-                    placeholder="Table Number"
-                    value={newTableNum}
-                    onChange={(e) => setNewTableNum(parseInt(e.target.value))}
-                    className="flex-1 bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Capacity"
-                    value={newTableCapacity}
-                    onChange={(e) => setNewTableCapacity(parseInt(e.target.value))}
-                    className="w-24 bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
-                  />
-                  <button
-                    onClick={createTable}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition shadow-md active:scale-95"
-                  >
-                    Create
-                  </button>
+                <h3 className="text-gray-900 font-bold mb-3">Add New Table</h3>
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div>
+                    <label className="block text-gray-700 text-sm font-semibold mb-1">Table Number</label>
+                    <input
+                      type="number"
+                      placeholder="e.g., 1, 2, 3"
+                      value={newTableNum}
+                      onChange={(e) => setNewTableNum(parseInt(e.target.value) || 0)}
+                      className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm font-semibold mb-1">Table Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g., VIP Table"
+                      value={newTableName}
+                      onChange={(e) => setNewTableName(e.target.value)}
+                      className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-sm font-semibold mb-1">Seats</label>
+                    <input
+                      type="number"
+                      placeholder="e.g., 4"
+                      value={newTableCapacity}
+                      onChange={(e) => setNewTableCapacity(parseInt(e.target.value) || 2)}
+                      className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
+                    />
+                  </div>
                 </div>
+                <button
+                  onClick={createTable}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition shadow-md active:scale-95"
+                >
+                  Create Table
+                </button>
               </div>
             )}
           </div>
@@ -1060,13 +1055,18 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
                                 : 'bg-emerald-100 border-emerald-400'
                             } hover:shadow-md group-hover:scale-105 transform`}
                           >
-                            <div className="text-center">
-                              <h3 className="text-2xl font-bold text-gray-900">
-                                {table.number}
-                              </h3>
-                              <p className="text-xs text-gray-700 mt-1">
-                                Capacity: {table.capacity}
+                          <div className="text-center">
+                            <h3 className="text-2xl font-bold text-gray-900">
+                              {table.number}
+                            </h3>
+                            {table.tableName && (
+                              <p className="text-sm text-purple-700 font-bold mt-2 truncate">
+                                📍 {table.tableName}
                               </p>
+                            )}
+                            <p className="text-xs text-gray-600 mt-1 font-medium">
+                              {table.capacity} seats
+                            </p>
                               {cart.length > 0 && (
                                 <span className="inline-block text-xs font-bold bg-white text-gray-900 px-2 py-0.5 rounded mt-1">
                                   {cart.length} items
@@ -1085,13 +1085,31 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
                               </span>
                             </div>
                           </div>
-                          {/* Delete Button on Hover */}
-                          <button
-                            onClick={() => deleteTable(table._id)}
-                            className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          {/* Edit and Delete Buttons on Hover */}
+                          <div className="absolute -top-2 -right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                editTable(table)
+                              }}
+                              className="bg-blue-500 hover:bg-blue-600 text-white p-1 rounded"
+                              title="Edit table name"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            {!table.isDefault && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  deleteTable(table._id)
+                                }}
+                                className="bg-red-500 hover:bg-red-600 text-white p-1 rounded"
+                                title="Delete table"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )
                     })}
@@ -1359,7 +1377,7 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
                               }}
                               className="bg-red-500 hover:bg-red-600 text-white p-2 rounded text-base font-bold"
                             >
-                              <Minus size={18} />
+                              -
                             </button>
                             <span className="text-gray-900 text-base font-bold w-8 text-center bg-gray-100 py-1 rounded">
                               {item.qty}
@@ -1444,8 +1462,7 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
                       onClick={handleHoldOrder}
                       className="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center gap-2 text-base"
                     >
-                      <Pause size={20} />
-                      Hold
+                      ⏸ Hold
                     </button>
                   </div>
 
@@ -1499,7 +1516,7 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
                                 className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded transition flex-shrink-0"
                                 title="Remove from bill"
                               >
-                                <Minus size={14} />
+                                -
                               </button>
                             </div>
                           </div>
@@ -1644,10 +1661,73 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
         </div>
       )}
 
+      {/* Edit Table Name Modal */}
+      {editingTable && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl w-full max-w-md border-2 border-gray-300 overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Edit2 size={24} />
+                Edit Table Name
+              </h2>
+              <button
+                onClick={cancelEdit}
+                className="text-white hover:text-gray-200 transition"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 bg-white">
+              <div className="mb-4">
+                <p className="text-gray-600 text-sm mb-2">
+                  Editing Table #{editingTable.number}
+                </p>
+                <label className="block text-gray-900 text-base font-bold mb-2">
+                  Table Name
+                </label>
+                <input
+                  type="text"
+                  value={editTableName}
+                  onChange={(e) => setEditTableName(e.target.value)}
+                  placeholder="Enter table name (e.g., VIP Table, Garden Area)"
+                  className="w-full bg-white text-gray-900 px-4 py-3 rounded-lg border-2 border-gray-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-200 outline-none text-base"
+                  autoFocus
+                />
+              </div>
+              
+              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 mb-4">
+                <p className="text-blue-800 text-sm">
+                  <strong>Tip:</strong> Give your table a meaningful name like "VIP Table", "Window Seat", or "Garden Area" to help identify it easily.
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-100 px-6 py-4 border-t border-gray-300 flex gap-3">
+              <button
+                onClick={saveTableName}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition text-base"
+              >
+                Save Name
+              </button>
+              <button
+                onClick={cancelEdit}
+                className="flex-1 bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg transition text-base"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Payment Modal */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl w-full max-w-2xl border-2 border-gray-300 overflow-hidden max-h-[90vh] flex flex-col shadow-2xl">
+          <div className="bg-white rounded-xl w-full max-w-4xl border-2 border-gray-300 overflow-hidden max-h-[85vh] flex flex-col shadow-2xl">
             {/* Header */}
             <div className="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4 flex items-center justify-between border-b border-gray-300">
               <h2 className="text-2xl font-bold text-white">💳 Payment Details</h2>
@@ -1733,17 +1813,96 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
               {/* Payment Mode */}
               <div>
                 <label className="block text-gray-900 text-base font-bold mb-2">Payment Mode</label>
-                <select
-                  value={paymentMode}
-                  onChange={(e) => setPaymentMode(e.target.value)}
-                  className="w-full bg-white text-gray-900 px-4 py-3 rounded-lg border-2 border-gray-300 focus:border-green-600 focus:ring-2 focus:ring-green-200 outline-none text-base font-semibold"
-                >
-                  <option value="cash">💵 Cash</option>
-                  <option value="card">💳 Card</option>
-                  <option value="upi">📱 UPI</option>
-                  <option value="cheque">📋 Cheque</option>
-                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setPaymentMode('cash'); setSplitPaymentMode(false); }}
+                    className={`p-3 rounded-lg border-2 font-semibold transition ${paymentMode === 'cash' && !splitPaymentMode ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-900 border-gray-300 hover:border-green-400'}`}
+                  >
+                    💵 Cash
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPaymentMode('card'); setSplitPaymentMode(false); }}
+                    className={`p-3 rounded-lg border-2 font-semibold transition ${paymentMode === 'card' && !splitPaymentMode ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-900 border-gray-300 hover:border-green-400'}`}
+                  >
+                    💳 Card
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPaymentMode('upi'); setSplitPaymentMode(false); }}
+                    className={`p-3 rounded-lg border-2 font-semibold transition ${paymentMode === 'upi' && !splitPaymentMode ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-900 border-gray-300 hover:border-green-400'}`}
+                  >
+                    📱 UPI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSplitPaymentMode(true)}
+                    className={`p-3 rounded-lg border-2 font-semibold transition ${splitPaymentMode ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-900 border-gray-300 hover:border-purple-400'}`}
+                  >
+                    ✂️ Split
+                  </button>
+                </div>
               </div>
+
+              {/* Split Payment Section */}
+              {splitPaymentMode && (
+                <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-200 space-y-3">
+                  <h4 className="text-gray-900 font-bold">Split Payment</h4>
+                  {splitPayments.map((payment, index) => (
+                    <div key={index} className="flex gap-2 items-center">
+                      <select
+                        value={payment.mode}
+                        onChange={(e) => {
+                          const newPayments = [...splitPayments]
+                          newPayments[index].mode = e.target.value
+                          setSplitPayments(newPayments)
+                        }}
+                        className="flex-1 bg-white text-gray-900 px-3 py-2 rounded-lg border border-gray-300 focus:border-purple-500 outline-none"
+                      >
+                        <option value="cash">💵 Cash</option>
+                        <option value="card">💳 Card</option>
+                        <option value="upi">📱 UPI</option>
+                      </select>
+                      <input
+                        type="number"
+                        placeholder="Amount"
+                        value={payment.amount || ''}
+                        onChange={(e) => {
+                          const newPayments = [...splitPayments]
+                          newPayments[index].amount = parseFloat(e.target.value) || 0
+                          setSplitPayments(newPayments)
+                        }}
+                        className="w-28 bg-white text-gray-900 px-3 py-2 rounded-lg border border-gray-300 focus:border-purple-500 outline-none"
+                      />
+                      {splitPayments.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => setSplitPayments(splitPayments.filter((_, i) => i !== index))}
+                          className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setSplitPayments([...splitPayments, { mode: 'cash', amount: 0 }])}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 rounded-lg transition"
+                  >
+                    + Add Payment Method
+                  </button>
+                  <div className="text-sm text-gray-700 font-semibold">
+                    Total Split: ₹{splitPayments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)} / ₹{(
+                      (currentOrderState?.billItems || []).reduce((sum, item) => sum + item.price * item.qty, 0) -
+                      discount +
+                      (currentOrderState?.billItems || []).reduce((sum, item) => sum + item.price * item.qty, 0) * 0.1 +
+                      roundOff
+                    ).toFixed(2)}
+                  </div>
+                </div>
+              )}
 
               {/* Final Total */}
               <div className="bg-green-600 p-5 rounded-lg mt-4">

@@ -16,7 +16,7 @@ export async function PATCH(
     }
 
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
     const users = db.collection('users')
 
     // Verify admin
@@ -69,7 +69,7 @@ export async function DELETE(
     }
 
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
     const users = db.collection('users')
 
     // Verify admin

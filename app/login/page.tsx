@@ -1,392 +1,416 @@
-'use client';
+﻿'use client'
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { persistentUserStorage, OfflineUser } from '@/lib/persistent-user-storage';
-import { Lock, Mail, Key, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Lock, Mail, AlertCircle, CheckCircle, UserPlus, Eye, EyeOff, Loader } from 'lucide-react'
+import DesktopOnlyWrapper from '@/components/desktop-only-wrapper'
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [uniqueKey, setUniqueKey] = useState('');
-  const [name, setName] = useState('');
-  const [role, setRole] = useState<'admin' | 'manager' | 'waiter' | 'chef'>('waiter');
-  const [error, setError] = useState('');
-  const [isLocked, setIsLocked] = useState(false);
-  const [unlockCode, setUnlockCode] = useState('');
-  const [loading, setLoading] = useState(false);
+  const router = useRouter()
+  const [isLogin, setIsLogin] = useState(true)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    passwordConfirm: '',
+    restaurantName: '',
+    subscriptionType: 'MONTHLY' as 'MONTHLY' | 'YEARLY'
+  })
+  const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [success, setSuccess] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  // Check if system is locked on mount
+  // Check if user is already logged in
   useEffect(() => {
-    // Prevent infinite redirects in offline mode
-    let isRedirecting = false;
-
-    const checkAndRedirect = () => {
-      if (isRedirecting) return;
-
-      const locked = persistentUserStorage.isLocked();
-      setIsLocked(locked);
-
-      // If user is already logged in and system is not locked, redirect to dashboard
-      const currentUser = persistentUserStorage.getCurrentUser();
-      if (currentUser && !locked) {
-        isRedirecting = true;
-        console.log('[Login] User found, redirecting to dashboard');
-        router.push('/dashboard');
-      }
-    };
-
-    // Check once on mount
-    checkAndRedirect();
-
-    // Prevent multiple checks
-    return () => {
-      isRedirecting = true;
-    };
-  }, [router]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      // Check system lock
-      if (persistentUserStorage.isLocked()) {
-        setError('System is locked. Please enter the unlock code.');
-        setIsLocked(true);
-        setLoading(false);
-        return;
-      }
-
-      // Attempt login
-      const user = persistentUserStorage.loginUser(email, password);
-
-      if (user) {
-        // Check if first login - show setup wizard
-        const setup = persistentUserStorage.getSetup();
-        if (!setup || !setup.tablesCount) {
-          router.push('/setup');
-        } else {
-          router.push('/dashboard');
-        }
-      } else {
-        setError('Invalid email or password');
-      }
-    } catch (err) {
-      setError('Login failed. Please try again.');
-      console.error(err);
-    } finally {
-      setLoading(false);
+    const token = localStorage.getItem('token')
+    if (token) {
+      router.push('/dashboard')
     }
-  };
+  }, [router])
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+  const validateForm = () => {
+    const errors: Record<string, string> = {}
 
-    try {
-      // Verify unique key (only admin needs entry key for first user)
-      const existingUsers = persistentUserStorage.getAllUsers();
-
-      if (existingUsers.length === 0) {
-        // First user - verify admin key
-        if (uniqueKey !== 'NEXUS2026') {
-          setError('Invalid unique key. Please contact administrator.');
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Check if email already exists
-      if (persistentUserStorage.userExists(email)) {
-        setError('Email already registered');
-        setLoading(false);
-        return;
-      }
-
-      // Create new user
-      const newUser: OfflineUser = {
-        id: `user-${Date.now()}`,
-        email,
-        password,
-        name,
-        role: existingUsers.length === 0 ? 'admin' : role,
-        createdAt: new Date().toISOString(),
-      };
-
-      persistentUserStorage.saveUser(newUser);
-
-      // If first user, initialize lock
-      if (existingUsers.length === 0) {
-        persistentUserStorage.initializeLock();
-      }
-
-      // Auto-login
-      persistentUserStorage.loginUser(email, password);
-
-      // Redirect to setup
-      router.push('/setup');
-    } catch (err) {
-      setError('Signup failed. Please try again.');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUnlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (persistentUserStorage.unlockSystem(unlockCode)) {
-      setIsLocked(false);
-      setUnlockCode('');
+    if (!isLogin) {
+      if (!formData.username.trim()) errors.username = 'Username is required'
+      if (!formData.email.trim()) errors.email = 'Email is required'
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = 'Invalid email format'
+      if (!formData.password) errors.password = 'Password is required'
+      else if (formData.password.length < 6) errors.password = 'Password must be at least 6 characters'
+      if (!formData.passwordConfirm) errors.passwordConfirm = 'Please confirm your password'
+      else if (formData.password !== formData.passwordConfirm) errors.passwordConfirm = 'Passwords do not match'
+      if (!formData.restaurantName.trim()) errors.restaurantName = 'Restaurant name is required'
     } else {
-      setError('Invalid unlock code');
+      if (!formData.email.trim()) errors.email = 'Email is required'
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = 'Invalid email format'
+      if (!formData.password) errors.password = 'Password is required'
     }
-  };
 
-  if (isLocked) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-lg shadow-2xl p-8">
-          <div className="flex justify-center mb-6">
-            <div className="bg-red-100 p-4 rounded-full">
-              <Lock className="text-red-600" size={32} />
-            </div>
-          </div>
+    setFieldErrors(errors)
+    return Object.keys(errors).length === 0
+  }
 
-          <h1 className="text-2xl font-bold text-center text-slate-900 mb-2">System Locked</h1>
-          <p className="text-center text-slate-600 mb-6">
-            This month's unlock is required. Please enter the unlock code to continue.
-          </p>
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!validateForm()) {
+      setError('Please fix the errors above')
+      return
+    }
 
-          <form onSubmit={handleUnlock} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                <Key size={16} className="inline mr-2" />
-                Unlock Code
-              </label>
-              <input
-                type="password"
-                value={unlockCode}
-                onChange={(e) => setUnlockCode(e.target.value)}
-                placeholder="Enter unlock code"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
+    setError('')
+    setSuccess('')
+    setLoading(true)
 
-            {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircle size={16} className="text-red-600" />
-                <p className="text-sm text-red-600">{error}</p>
-              </div>
-            )}
+    try {
+      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup'
+      const payload = isLogin
+        ? { email: formData.email, password: formData.password }
+        : {
+            username: formData.username,
+            email: formData.email,
+            password: formData.password,
+            passwordConfirm: formData.passwordConfirm,
+            restaurantName: formData.restaurantName,
+            subscriptionType: formData.subscriptionType
+          }
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
-            >
-              {loading ? 'Unlocking...' : 'Unlock'}
-            </button>
-          </form>
-        </div>
-      </div>
-    );
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.message || 'Authentication failed')
+        return
+      }
+
+      if (isLogin) {
+        // Store JWT token and user data in localStorage
+        localStorage.setItem('token', data.token)
+        localStorage.setItem('user', JSON.stringify(data.user))
+        
+        // Also store in cookies for server-side authentication
+        document.cookie = `token=${data.token}; path=/; max-age=${24 * 60 * 60}; SameSite=Lax`
+        document.cookie = `userRole=${data.user.role || 'admin'}; path=/; max-age=${24 * 60 * 60}; SameSite=Lax`
+
+        setSuccess('Login successful! Redirecting...')
+        setTimeout(() => {
+          router.push('/dashboard')
+        }, 1500)
+      } else {
+        setSuccess('Account created successfully! Switching to login...')
+        setTimeout(() => {
+          setIsLogin(true)
+          setFormData({
+            username: '',
+            email: '',
+            password: '',
+            passwordConfirm: '',
+            restaurantName: '',
+            subscriptionType: 'MONTHLY'
+          })
+          setFieldErrors({})
+          setSuccess('')
+        }, 2000)
+      }
+    } catch (err) {
+      setError('Network error. Please check your connection.')
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev }
+        delete newErrors[field]
+        return newErrors
+      })
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-lg shadow-2xl p-8">
-        {/* Logo/Title */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">RestaurantPRO</h1>
-          <p className="text-slate-600 text-sm">Team SHAURYA | NEXUS</p>
-        </div>
+    <DesktopOnlyWrapper>
+    <div className="min-h-screen bg-linear-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
+      {/* Animated background elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
+      </div>
 
-        {/* Tab Selector */}
-        <div className="flex gap-4 mb-6">
-          <button
-            onClick={() => {
-              setMode('login');
-              setError('');
-            }}
-            className={`flex-1 py-2 px-4 rounded-lg font-semibold transition ${
-              mode === 'login'
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            onClick={() => {
-              setMode('signup');
-              setError('');
-            }}
-            className={`flex-1 py-2 px-4 rounded-lg font-semibold transition ${
-              mode === 'signup'
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            Sign Up
-          </button>
-        </div>
+      <div className="relative w-full max-w-md">
+        {/* Main Card */}
+        <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-white/10">
+          {/* Logo Section */}
+          <div className="text-center mb-8">
+            <div className="inline-block p-3 bg-linear-to-br from-blue-500 to-blue-600 rounded-xl mb-4">
+              <Lock className="text-white" size={24} />
+            </div>
+            <h1 className="text-3xl font-bold text-slate-900">
+              {isLogin ? 'Welcome Back' : 'Create Account'}
+            </h1>
+            <p className="text-slate-600 text-sm mt-2">
+              {isLogin
+                ? 'Sign in to your restaurant dashboard'
+                : 'Set up your restaurant management system'
+              }
+            </p>
+          </div>
 
-        {/* Login Form */}
-        {mode === 'login' && (
-          <form onSubmit={handleLogin} className="space-y-4">
+          {/* Tab Selector */}
+          <div className="flex gap-2 mb-6 bg-slate-100 p-1 rounded-lg">
+            <button
+              onClick={() => {
+                setIsLogin(true)
+                setError('')
+                setFieldErrors({})
+              }}
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all duration-200 ${
+                isLogin
+                  ? 'bg-white text-blue-600 shadow-md'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => {
+                setIsLogin(false)
+                setError('')
+                setFieldErrors({})
+              }}
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all duration-200 ${
+                !isLogin
+                  ? 'bg-white text-blue-600 shadow-md'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          {/* Success Message */}
+          {success && (
+            <div className="flex gap-3 p-3 bg-green-50 border border-green-200 rounded-lg mb-4 animate-in fade-in">
+              <CheckCircle size={18} className="text-green-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-green-700 font-medium">{success}</p>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="flex gap-3 p-3 bg-red-50 border border-red-200 rounded-lg mb-4 animate-in fade-in">
+              <AlertCircle size={18} className="text-red-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700 font-medium">{error}</p>
+            </div>
+          )}
+
+          {/* Login/Signup Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {!isLogin && (
+              <>
+                {/* Username Field */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.username}
+                    onChange={(e) => handleInputChange('username', e.target.value)}
+                    className={`w-full px-4 py-3 rounded-lg border-2 transition-all duration-200 focus:outline-none ${
+                      fieldErrors.username
+                        ? 'border-red-300 bg-red-50/30 focus:border-red-500'
+                        : 'border-slate-200 focus:border-blue-500 focus:bg-blue-50/30'
+                    }`}
+                    placeholder="your_username"
+                  />
+                  {fieldErrors.username && (
+                    <p className="text-xs text-red-600 mt-1">{fieldErrors.username}</p>
+                  )}
+                </div>
+
+                {/* Restaurant Name Field */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    Restaurant Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.restaurantName}
+                    onChange={(e) => handleInputChange('restaurantName', e.target.value)}
+                    className={`w-full px-4 py-3 rounded-lg border-2 transition-all duration-200 focus:outline-none ${
+                      fieldErrors.restaurantName
+                        ? 'border-red-300 bg-red-50/30 focus:border-red-500'
+                        : 'border-slate-200 focus:border-blue-500 focus:bg-blue-50/30'
+                    }`}
+                    placeholder="Your Restaurant"
+                  />
+                  {fieldErrors.restaurantName && (
+                    <p className="text-xs text-red-600 mt-1">{fieldErrors.restaurantName}</p>
+                  )}
+                </div>
+
+                {/* Subscription Type */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                    Plan
+                  </label>
+                  <select
+                    value={formData.subscriptionType}
+                    onChange={(e) => handleInputChange('subscriptionType', e.target.value)}
+                    className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-blue-500 focus:outline-none focus:bg-blue-50/30 transition-all duration-200"
+                  >
+                    <option value="MONTHLY">Monthly - ₹999/month</option>
+                    <option value="YEARLY">Yearly - ₹9999/year (Save 17%)</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            {/* Email Field */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                <Mail size={16} className="inline mr-2" />
-                Email
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <span className="flex items-center gap-1">
+                  <Mail size={16} /> Email
+                </span>
               </label>
               <input
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
+                value={formData.email}
+                onChange={(e) => handleInputChange('email', e.target.value)}
+                className={`w-full px-4 py-3 rounded-lg border-2 transition-all duration-200 focus:outline-none ${
+                  fieldErrors.email
+                    ? 'border-red-300 bg-red-50/30 focus:border-red-500'
+                    : 'border-slate-200 focus:border-blue-500 focus:bg-blue-50/30'
+                }`}
+                placeholder="admin@restaurant.com"
               />
+              {fieldErrors.email && (
+                <p className="text-xs text-red-600 mt-1">{fieldErrors.email}</p>
+              )}
             </div>
 
+            {/* Password Field */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                <Lock size={16} className="inline mr-2" />
-                Password
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <span className="flex items-center gap-1">
+                  <Lock size={16} /> Password
+                </span>
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={formData.password}
+                  onChange={(e) => handleInputChange('password', e.target.value)}
+                  className={`w-full px-4 py-3 pr-10 rounded-lg border-2 transition-all duration-200 focus:outline-none ${
+                    fieldErrors.password
+                      ? 'border-red-300 bg-red-50/30 focus:border-red-500'
+                      : 'border-slate-200 focus:border-blue-500 focus:bg-blue-50/30'
+                  }`}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              {fieldErrors.password && (
+                <p className="text-xs text-red-600 mt-1">{fieldErrors.password}</p>
+              )}
             </div>
 
-            {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircle size={16} className="text-red-600" />
-                <p className="text-sm text-red-600">{error}</p>
+            {/* Confirm Password Field */}
+            {!isLogin && (
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  <span className="flex items-center gap-1">
+                    <Lock size={16} /> Confirm Password
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={formData.passwordConfirm}
+                    onChange={(e) => handleInputChange('passwordConfirm', e.target.value)}
+                    className={`w-full px-4 py-3 pr-10 rounded-lg border-2 transition-all duration-200 focus:outline-none ${
+                      fieldErrors.passwordConfirm
+                        ? 'border-red-300 bg-red-50/30 focus:border-red-500'
+                        : 'border-slate-200 focus:border-blue-500 focus:bg-blue-50/30'
+                    }`}
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {fieldErrors.passwordConfirm && (
+                  <p className="text-xs text-red-600 mt-1">{fieldErrors.passwordConfirm}</p>
+                )}
               </div>
             )}
 
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+              className="w-full bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-6"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <>
+                  <Loader size={18} className="animate-spin" />
+                  {isLogin ? 'Signing in...' : 'Creating account...'}
+                </>
+              ) : (
+                <>
+                  {isLogin ? 'Sign In' : 'Create Account'}
+                </>
+              )}
             </button>
           </form>
-        )}
 
-        {/* Signup Form */}
-        {mode === 'signup' && (
-          <form onSubmit={handleSignup} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Full Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="John Doe"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                <Mail size={16} className="inline mr-2" />
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                <Lock size={16} className="inline mr-2" />
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                <Key size={16} className="inline mr-2" />
-                Unique Key (First User Only)
-              </label>
-              <input
-                type="password"
-                value={uniqueKey}
-                onChange={(e) => setUniqueKey(e.target.value)}
-                placeholder="Enter unique key"
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <p className="text-xs text-slate-500 mt-1">
-                Required only if you're the first user. Ask administrator for the key.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Role (if not first user)</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as any)}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="waiter">Waiter</option>
-                <option value="chef">Chef / Kitchen</option>
-                <option value="manager">Manager</option>
-              </select>
-            </div>
-
-            {error && (
-              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircle size={16} className="text-red-600" />
-                <p className="text-sm text-red-600">{error}</p>
-              </div>
-            )}
-
+          {/* Toggle between login and signup */}
+          <div className="mt-6 text-center">
+            <p className="text-slate-600 text-sm mb-3">
+              {isLogin ? "Don't have an account?" : 'Already have an account?'}
+            </p>
             <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-50"
+              onClick={() => {
+                setIsLogin(!isLogin)
+                setError('')
+                setFieldErrors({})
+                setSuccess('')
+              }}
+              className="text-blue-600 hover:text-blue-700 font-semibold text-sm"
             >
-              {loading ? 'Creating Account...' : 'Create Account'}
+              {isLogin ? 'Create one here' : 'Sign in here'}
             </button>
-          </form>
-        )}
+          </div>
 
-        {/* Footer */}
-        <p className="text-center text-xs text-slate-500 mt-6">
-          Works offline - Your data is stored securely on this device
-        </p>
+          {/* Footer */}
+          <p className="text-center text-xs text-slate-500 mt-6 pt-6 border-t border-slate-200">
+            Enterprise Restaurant POS with Subscription Management
+          </p>
+        </div>
       </div>
     </div>
-  );
+    </DesktopOnlyWrapper>
+  )
 }

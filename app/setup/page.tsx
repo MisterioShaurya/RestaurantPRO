@@ -42,6 +42,19 @@ export default function SetupPage() {
 
       persistentUserStorage.saveTables(tables);
 
+      // Also save tables to database (mark as default)
+      for (let i = 1; i <= tablesCount; i++) {
+        await fetch('/api/tables', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            number: i,
+            capacity: 4,
+            isDefault: true
+          }),
+        })
+      }
+
       setStep('complete');
       setTimeout(() => {
         router.push('/dashboard');

@@ -9,11 +9,35 @@ if (!MONGODB_URI) {
 let client: MongoClient | null = null
 
 export async function getMongoClient() {
-  if (!client) {
+  try {
+    // If client exists, check if it's still connected
+    if (client) {
+      try {
+        // Try to ping the database to check if connection is alive
+        await client.db('admin').command({ ping: 1 })
+        return client
+      } catch (error) {
+        // Connection is closed or invalid, create a new one
+        console.log('[MongoDB] Connection lost, reconnecting...')
+        try {
+          await client.close()
+        } catch (closeError) {
+          // Ignore close errors
+        }
+        client = null
+      }
+    }
+    
+    // Create new client
     client = new MongoClient(MONGODB_URI)
     await client.connect()
+    console.log('[MongoDB] Connected successfully')
+    return client
+  } catch (error) {
+    console.error('[MongoDB] Connection error:', error)
+    client = null
+    throw error
   }
-  return client
 }
 
 export function getDatabase() {

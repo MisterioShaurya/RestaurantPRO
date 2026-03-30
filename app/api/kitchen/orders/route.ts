@@ -4,7 +4,7 @@ import { getMongoClient } from '@/lib/mongodb'
 export async function GET() {
   try {
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
     const orders = await db
       .collection('orders')
       .find({ status: { $ne: 'completed' } })

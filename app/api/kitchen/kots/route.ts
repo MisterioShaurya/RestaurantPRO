@@ -17,16 +17,24 @@ export interface KOT {
   printCount: number
 }
 
+import { getRestaurantIdFromRequest } from '@/lib/get-restaurant-id'
+
 export async function GET(req: NextRequest) {
   try {
+    const restaurantId = await getRestaurantIdFromRequest(req)
+    
+    if (!restaurantId) {
+      return NextResponse.json({ kots: [] })
+    }
+
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
     
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status')
     const chefId = searchParams.get('chefId')
     
-    const query: any = {}
+    const query: any = { restaurantId }
     if (status) query.status = status
     if (chefId) query.chefId = chefId
     
@@ -54,6 +62,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const restaurantId = await getRestaurantIdFromRequest(req)
+    
+    if (!restaurantId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { orderId, orderNumber, tableNumber, items, specialInstructions, chefId } = await req.json()
 
     if (!orderId || !items || items.length === 0) {
@@ -61,9 +75,10 @@ export async function POST(req: NextRequest) {
     }
 
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
 
     const kotData = {
+      restaurantId,
       orderId,
       orderNumber,
       tableNumber: tableNumber || null,
@@ -83,9 +98,9 @@ export async function POST(req: NextRequest) {
     const normalized = kot ? {
       ...kot,
       _id: kot._id.toString(),
-      createdAt: kot.createdAt?.toISOString(),
-      updatedAt: kot.updatedAt?.toISOString(),
-      printedAt: kot.printedAt?.toISOString(),
+      createdAt: kot.createdAt instanceof Date ? kot.createdAt.toISOString() : kot.createdAt,
+      updatedAt: kot.updatedAt instanceof Date ? kot.updatedAt.toISOString() : kot.updatedAt,
+      printedAt: kot.printedAt instanceof Date ? kot.printedAt.toISOString() : kot.printedAt,
     } : null
 
     return NextResponse.json({ kot: normalized }, { status: 201 })
@@ -104,7 +119,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
 
     const updateData: any = {
       updatedAt: new Date(),
@@ -129,9 +144,9 @@ export async function PATCH(req: NextRequest) {
     const normalized = kot ? {
       ...kot,
       _id: kot._id.toString(),
-      createdAt: kot.createdAt?.toISOString(),
-      updatedAt: kot.updatedAt?.toISOString(),
-      printedAt: kot.printedAt?.toISOString(),
+      createdAt: kot.createdAt instanceof Date ? kot.createdAt.toISOString() : kot.createdAt,
+      updatedAt: kot.updatedAt instanceof Date ? kot.updatedAt.toISOString() : kot.updatedAt,
+      printedAt: kot.printedAt instanceof Date ? kot.printedAt.toISOString() : kot.printedAt,
     } : null
 
     return NextResponse.json({ kot: normalized })

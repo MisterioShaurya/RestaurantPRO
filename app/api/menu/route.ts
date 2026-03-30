@@ -24,86 +24,119 @@ function writeMenuToFile(menuItems: any[]) {
   }
 }
 
-export async function GET() {
+// Auth helper for POST operations (menu management)
+async function getUserFromToken(request: NextRequest) {
   try {
-    // Try to read from JSON file first (for offline support)
-    let items = readMenuFromFile()
+    const authHeader = request.headers.get('authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return null
+    }
 
-    // Normalize _id values (convert objects to strings)
-    items = items.map((item: any) => ({
-      ...item,
-      _id: item._id?.$oid ? item._id.$oid : (item._id ? item._id.toString() : `item-${Date.now()}`),
-    }))
+    const token = authHeader.substring(7)
+    const jwt = require('jsonwebtoken')
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any
+    return decoded
+  } catch (error) {
+    console.error('[Menu] Token verification error:', error)
+    return null
+  }
+}
 
-    // If JSON is empty or not found, try database
-    if (!items || items.length === 0) {
-      try {
-        const client = await getMongoClient()
-        const db = client.db('restaurant_pro')
-        items = await db.collection('menu').find({}).toArray()
-        items = items.map((item: any) => ({
+import { getRestaurantIdFromRequest } from '@/lib/get-restaurant-id'
+
+// Public GET endpoint - no auth required for POS system
+export async function GET(request: NextRequest) {
+  try {
+    const restaurantId = await getRestaurantIdFromRequest(request)
+    
+    if (!restaurantId) {
+      return NextResponse.json({ items: [] })
+    }
+
+    // Try to read from database first
+    try {
+      const client = await getMongoClient()
+      const db = client.db('restaurant_pos')
+      const items = await db.collection('menu').find({ restaurantId }).toArray()
+
+      // Filter only available items for POS
+      const availableItems = items.filter((item: any) => item.available !== false)
+
+      return NextResponse.json({
+        items: availableItems.map((item: any) => ({
           ...item,
           _id: item._id ? item._id.toString() : `item-${Date.now()}`,
         }))
-        // Write to JSON for offline use
-        writeMenuToFile(items)
-      } catch (dbError) {
-        console.error('[Menu] Database error:', dbError)
-        // Return empty if both fail
-        items = []
-      }
-    }
+      })
+    } catch (dbError) {
+      console.error('[Menu] Database error:', dbError)
 
-    return NextResponse.json({ items })
-  } catch (error) {
-    console.error('[Menu] GET error:', error)
-    return NextResponse.json({ items: [] }, { status: 500 })
+      // Fallback to JSON file
+      let items = readMenuFromFile()
+
+      // Filter only available items
+      items = items.filter((item: any) => item.available !== false)
+
+      // Normalize _id values
+      items = items.map((item: any) => ({
+        ...item,
+        _id: item._id?.$oid ? item._id.$oid : (item._id ? item._id.toString() : `item-${Date.now()}`),
+      }))
+
+      return NextResponse.json({ items })
+    }
+  } catch (error: any) {
+    console.error('[Menu] Error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, price, category, available, description } = await request.json()
-
-    if (!name || !price || !category) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    const user = await getUserFromToken(request)
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const newItem = {
-      _id: Date.now().toString(), // Simple ID generation
-      name,
-      price: Number(price),
-      category,
-      available: available !== false,
-      description: description || '',
+    const restaurantId = await getRestaurantIdFromRequest(request)
+    if (!restaurantId) {
+      return NextResponse.json({ error: 'Restaurant ID required' }, { status: 400 })
+    }
+
+    const body = await request.json()
+    const menuItem = {
+      ...body,
+      restaurantId,
+      userId: user.id,
       createdAt: new Date(),
+      updatedAt: new Date(),
     }
 
-    // Read current menu
-    let items = readMenuFromFile()
-    items.push(newItem)
-    writeMenuToFile(items)
-
-    // Try to sync with database
     try {
       const client = await getMongoClient()
-      const db = client.db('restaurant_pro')
-      const result = await db.collection('menu').insertOne({
-        ...newItem,
-        _id: new ObjectId(), // Use ObjectId for database
-      })
-      // Update the item with database ID
-      newItem._id = result.insertedId.toString()
-      items[items.length - 1] = newItem
-      writeMenuToFile(items)
-    } catch (dbError) {
-      console.error('[Menu] Database sync error:', dbError)
-      // Continue with local storage
-    }
+      const db = client.db('restaurant_pos')
+      const result = await db.collection('menu').insertOne(menuItem)
 
-    return NextResponse.json({ item: newItem }, { status: 201 })
-  } catch (error) {
-    console.error('[Menu] POST error:', error)
-    return NextResponse.json({ error: 'Failed to create menu item' }, { status: 500 })
+      return NextResponse.json({
+        ...menuItem,
+        _id: result.insertedId.toString(),
+      })
+    } catch (dbError) {
+      console.error('[Menu] Database insert error:', dbError)
+
+      // Fallback to JSON file
+      let items = readMenuFromFile()
+      const newItem = {
+        ...menuItem,
+        _id: `item-${Date.now()}`,
+      }
+      items.push(newItem)
+      writeMenuToFile(items)
+
+      return NextResponse.json(newItem)
+    }
+  } catch (error: any) {
+    console.error('[Menu] Error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

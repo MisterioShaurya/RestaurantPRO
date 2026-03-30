@@ -6,7 +6,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   try {
     const { status } = await req.json()
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
 
     const result = await db.collection('reservations').updateOne(
       { _id: new ObjectId(params.id) },

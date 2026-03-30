@@ -1,30 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-
-const ORDERS_FILE_PATH = path.join(process.cwd(), 'orders.json')
-
-function readOrdersFromFile() {
-  try {
-    const data = fs.readFileSync(ORDERS_FILE_PATH, 'utf8')
-    return JSON.parse(data)
-  } catch (error) {
-    console.error('[Orders] Error reading orders.json:', error)
-    return []
-  }
-}
-
-function writeOrdersToFile(orders: any[]) {
-  try {
-    fs.writeFileSync(ORDERS_FILE_PATH, JSON.stringify(orders, null, 2))
-  } catch (error) {
-    console.error('[Orders] Error writing orders.json:', error)
-  }
-}
+import { getMongoClient } from '@/lib/mongodb'
+import { getRestaurantIdFromRequest } from '@/lib/get-restaurant-id'
 
 export async function GET(req: NextRequest) {
   try {
-    const orders = readOrdersFromFile()
+    const restaurantId = await getRestaurantIdFromRequest(req)
+    
+    if (!restaurantId) {
+      return NextResponse.json({ orders: [] })
+    }
+
+    const client = await getMongoClient()
+    const db = client.db('restaurant_pos')
+    const orders = await db.collection('orders').find({ restaurantId }).toArray()
     return NextResponse.json({ orders })
   } catch (error) {
     console.error('[Orders] GET error:', error)
@@ -34,56 +22,59 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const restaurantId = await getRestaurantIdFromRequest(req)
+    
+    if (!restaurantId) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    }
+
     const order = await req.json()
 
-    let orders = readOrdersFromFile()
+    const client = await getMongoClient()
+    const db = client.db('restaurant_pos')
     
     if (!order.createdAt) {
       order.createdAt = new Date().toISOString()
     }
     
-    orders.push(order)
-    writeOrdersToFile(orders)
+    const result = await db.collection('orders').insertOne({
+      ...order,
+      restaurantId,
+    })
 
-    return NextResponse.json({ order }, { status: 201 })
+    return NextResponse.json({ order: { ...order, _id: result.insertedId } }, { status: 201 })
   } catch (error) {
     console.error('[Orders] POST error:', error)
     return NextResponse.json({ message: 'Failed to create order' }, { status: 500 })
   }
 }
 
-export async function PATCH(req: NextRequest) {
+export async function PUT(req: NextRequest) {
   try {
-    const { id, updates } = await req.json()
+    const restaurantId = await getRestaurantIdFromRequest(req)
+    
+    if (!restaurantId) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    }
 
-    let orders = readOrdersFromFile()
-    const index = orders.findIndex((o: any) => o.id === id)
+    const { orderId, id, status } = await req.json()
+    const updateId = orderId || id
 
-    if (index === -1) {
+    const client = await getMongoClient()
+    const db = client.db('restaurant_pos')
+    
+    const result = await db.collection('orders').updateOne(
+      { $or: [{ id: updateId }, { _id: updateId }], restaurantId },
+      { $set: { status, updatedAt: new Date().toISOString() } }
+    )
+
+    if (result.matchedCount === 0) {
       return NextResponse.json({ message: 'Order not found' }, { status: 404 })
     }
 
-    orders[index] = { ...orders[index], ...updates }
-    writeOrdersToFile(orders)
-
-    return NextResponse.json({ order: orders[index] })
+    return NextResponse.json({ message: 'Order updated' })
   } catch (error) {
-    console.error('[Orders] PATCH error:', error)
+    console.error('[Orders] PUT error:', error)
     return NextResponse.json({ message: 'Failed to update order' }, { status: 500 })
-  }
-}
-
-export async function DELETE(req: NextRequest) {
-  try {
-    const { id } = await req.json()
-
-    let orders = readOrdersFromFile()
-    orders = orders.filter((o: any) => o.id !== id)
-    writeOrdersToFile(orders)
-
-    return NextResponse.json({ message: 'Order deleted' })
-  } catch (error) {
-    console.error('[Orders] DELETE error:', error)
-    return NextResponse.json({ message: 'Failed to delete order' }, { status: 500 })
   }
 }

@@ -11,7 +11,7 @@ export async function PATCH(
     const { status, paymentMethod } = await request.json()
 
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
 
     const updates: any = { status, updatedAt: new Date() }
     if (paymentMethod) updates.paymentMethod = paymentMethod
@@ -22,7 +22,7 @@ export async function PATCH(
       { returnDocument: 'after' }
     )
   const bill = result?.value || null
-  const normalized = bill ? { ...bill, _id: bill._id.toString(), createdAt: bill.createdAt?.toISOString(), updatedAt: bill.updatedAt?.toISOString() } : null
+  const normalized = bill ? { ...bill, _id: bill._id.toString(), createdAt: bill.createdAt instanceof Date ? bill.createdAt.toISOString() : bill.createdAt, updatedAt: bill.updatedAt instanceof Date ? bill.updatedAt.toISOString() : bill.updatedAt } : null
     return NextResponse.json({ bill: normalized }, { status: 200 })
   } catch (error) {
     console.error('Billing PATCH error:', error)
@@ -38,7 +38,7 @@ export async function DELETE(
     const { id } = params
 
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
 
     await db.collection('bills').deleteOne({ _id: new ObjectId(id) })
 

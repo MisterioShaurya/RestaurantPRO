@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     }
 
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
     const users = db.collection('users')
 
     // Get all users created by this admin (or if admin, get all from their restaurant)
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
     const users = db.collection('users')
 
     // Verify admin exists

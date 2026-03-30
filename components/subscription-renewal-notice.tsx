@@ -1,87 +1,216 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { X, AlertCircle } from 'lucide-react'
-import { persistentUserStorage } from '@/lib/persistent-user-storage'
+import { useState } from 'react'
+import { CreditCard, AlertTriangle, CheckCircle, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
-export function SubscriptionRenewalNotice() {
-  const [showNotice, setShowNotice] = useState(false)
-  const [daysRemaining, setDaysRemaining] = useState(0)
+interface SubscriptionRenewalNoticeProps {
+  subscription: {
+    status: 'ACTIVE' | 'EXPIRED' | 'GRACE_PERIOD' | 'SUSPENDED'
+    type: 'MONTHLY' | 'YEARLY'
+    expiresAt: string
+    gracePeriodEndsAt?: string
+  }
+  onRenewal?: () => void
+}
 
-  useEffect(() => {
-    // Check on mount
-    if (persistentUserStorage.shouldShowRenewalNotice()) {
-      setDaysRemaining(persistentUserStorage.getDaysRemaining())
-      setShowNotice(true)
+export function SubscriptionRenewalNotice({ subscription, onRenewal }: SubscriptionRenewalNoticeProps) {
+  const [showRenewalModal, setShowRenewalModal] = useState(false)
+  const [renewalType, setRenewalType] = useState<'MONTHLY' | 'YEARLY'>(subscription.type)
+  const [processing, setProcessing] = useState(false)
+  const [error, setError] = useState('')
+
+  const isExpired = subscription.status === 'EXPIRED'
+  const isGracePeriod = subscription.status === 'GRACE_PERIOD'
+  const isSuspended = subscription.status === 'SUSPENDED'
+
+  const getPricing = (type: 'MONTHLY' | 'YEARLY') => {
+    return type === 'MONTHLY' ? 999 : 9999
+  }
+
+  const handleRenewal = async () => {
+    setProcessing(true)
+    setError('')
+
+    try {
+      // In a real implementation, this would integrate with a payment gateway
+      // For now, we'll simulate the renewal process
+      const response = await fetch('/api/subscription/renew', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscriptionType: renewalType }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.message || 'Renewal failed')
+        return
+      }
+
+      setShowRenewalModal(false)
+      onRenewal?.()
+      // Reload page to refresh subscription status
+      window.location.reload()
+    } catch (err) {
+      setError('Network error. Please try again.')
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const getNoticeContent = () => {
+    if (isExpired) {
+      return {
+        title: 'Subscription Expired',
+        message: 'Your subscription has expired. Renew now to continue using all features.',
+        severity: 'high' as const
+      }
     }
 
-    // Check every hour
-    const interval = setInterval(() => {
-      if (persistentUserStorage.shouldShowRenewalNotice()) {
-        setDaysRemaining(persistentUserStorage.getDaysRemaining())
-        setShowNotice(true)
-      } else {
-        setShowNotice(false)
+    if (isGracePeriod) {
+      const daysLeft = Math.ceil((new Date(subscription.gracePeriodEndsAt!).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      return {
+        title: 'Grace Period Active',
+        message: `You have ${daysLeft} days left in your grace period. Renew now to avoid service interruption.`,
+        severity: 'medium' as const
       }
-    }, 60 * 60 * 1000)
+    }
 
-    return () => clearInterval(interval)
-  }, [])
+    if (isSuspended) {
+      return {
+        title: 'Subscription Suspended',
+        message: 'Your subscription has been suspended. Please contact support to resolve this issue.',
+        severity: 'high' as const
+      }
+    }
 
-  if (!showNotice) return null
+    return null
+  }
+
+  const noticeContent = getNoticeContent()
+
+  if (!noticeContent) return null
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 max-w-md animate-in fade-in slide-in-from-bottom-4">
-      <div className="bg-linear-to-r from-amber-50 to-orange-50 dark:from-amber-900 dark:to-orange-900 border-2 border-amber-400 dark:border-amber-600 rounded-xl shadow-2xl p-6 backdrop-blur-sm">
-        {/* Close Button */}
-        <button
-          onClick={() => setShowNotice(false)}
-          className="absolute top-3 right-3 p-1.5 hover:bg-amber-200 dark:hover:bg-amber-800 rounded-lg transition"
-        >
-          <X size={18} className="text-amber-700 dark:text-amber-200" />
-        </button>
-
-        {/* Header */}
-        <div className="flex items-start gap-3 mb-3">
-          <AlertCircle size={28} className="text-amber-600 dark:text-amber-300 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h3 className="text-lg font-bold text-amber-900 dark:text-amber-100">
-              Subscription Renewal Required
-            </h3>
+    <>
+      <Alert className={`border-l-4 ${
+        noticeContent.severity === 'high'
+          ? 'border-l-red-500 bg-red-50'
+          : 'border-l-yellow-500 bg-yellow-50'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className={`h-4 w-4 ${
+              noticeContent.severity === 'high' ? 'text-red-600' : 'text-yellow-600'
+            }`} />
+            <div>
+              <AlertDescription className="font-medium">
+                {noticeContent.title}
+              </AlertDescription>
+              <AlertDescription className="text-sm mt-1">
+                {noticeContent.message}
+              </AlertDescription>
+            </div>
           </div>
+          {!isSuspended && (
+            <Button
+              size="sm"
+              variant={noticeContent.severity === 'high' ? 'destructive' : 'default'}
+              onClick={() => setShowRenewalModal(true)}
+            >
+              <CreditCard className="h-4 w-4 mr-1" />
+              Renew Now
+            </Button>
+          )}
         </div>
+      </Alert>
 
-        {/* Message */}
-        <div className="mb-4 text-sm">
-          <p className="text-amber-800 dark:text-amber-200 mb-2">
-            Your subscription expires in <span className="font-bold text-lg text-amber-700 dark:text-amber-100">{daysRemaining}</span> day{daysRemaining !== 1 ? 's' : ''}.
-          </p>
-          <p className="text-amber-700 dark:text-amber-300">
-            Please contact the administrator to renew your subscription and get the activation code to continue using the system after expiry.
-          </p>
-        </div>
+      {/* Renewal Modal */}
+      <Dialog open={showRenewalModal} onOpenChange={setShowRenewalModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-blue-600" />
+              Renew Subscription
+            </DialogTitle>
+          </DialogHeader>
 
-        {/* Expiry Date */}
-        <div className="bg-white dark:bg-amber-950 p-3 rounded-lg mb-4 border border-amber-200 dark:border-amber-700">
-          <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase">Expires On</p>
-          <p className="text-sm font-bold text-amber-900 dark:text-amber-100 mt-1">
-            {new Date(Date.now() + daysRemaining * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </p>
-        </div>
+          <div className="space-y-4">
+            <div>
+              <Label>Current Plan: {subscription.type}</Label>
+              <p className="text-sm text-gray-600 mt-1">
+                Choose your renewal plan
+              </p>
+            </div>
 
-        {/* Action Button */}
-        <button
-          onClick={() => setShowNotice(false)}
-          className="w-full py-2.5 bg-linear-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold rounded-lg transition shadow-md active:scale-95"
-        >
-          ✓ I Understand
-        </button>
-      </div>
-    </div>
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  id="monthly"
+                  name="renewal-type"
+                  value="MONTHLY"
+                  checked={renewalType === 'MONTHLY'}
+                  onChange={(e) => setRenewalType(e.target.value as 'MONTHLY')}
+                  className="text-blue-600"
+                />
+                <Label htmlFor="monthly" className="flex-1 cursor-pointer">
+                  <div className="flex justify-between">
+                    <span>Monthly Plan</span>
+                    <span className="font-semibold">₹999/month</span>
+                  </div>
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="radio"
+                  id="yearly"
+                  name="renewal-type"
+                  value="YEARLY"
+                  checked={renewalType === 'YEARLY'}
+                  onChange={(e) => setRenewalType(e.target.value as 'YEARLY')}
+                  className="text-blue-600"
+                />
+                <Label htmlFor="yearly" className="flex-1 cursor-pointer">
+                  <div className="flex justify-between">
+                    <span>Yearly Plan</span>
+                    <span className="font-semibold">₹9,999/year</span>
+                  </div>
+                  <p className="text-xs text-green-600">Save ₹989 compared to monthly</p>
+                </Label>
+              </div>
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex gap-2 justify-end pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowRenewalModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRenewal}
+                disabled={processing}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {processing ? 'Processing...' : `Renew for ₹${getPricing(renewalType).toLocaleString()}`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
