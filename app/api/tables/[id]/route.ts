@@ -29,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params
     const { status } = await req.json()
     const client = await getMongoClient()
-    const db = client.db('restaurant_pos')
+    const db = client.db('restaurant_pro')
 
     const result = await db.collection('tables').updateOne(
       { _id: new ObjectId(id) },
@@ -50,7 +50,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     // Delete from database
     try {
       const client = await getMongoClient()
-      const db = client.db('restaurant_pos')
+      const db = client.db('restaurant_pro')
       await db.collection('tables').deleteOne({ _id: new ObjectId(tableId) })
     } catch (dbError) {
       console.error('[Tables] Database delete error:', dbError)
