@@ -6,7 +6,8 @@
     "capacity": 2,
     "status": "available",
     "isDefault": false,
-    "createdAt": "2026-03-30T21:20:53.081Z"
+    "createdAt": "2026-03-30T21:20:53.081Z",
+    "tableName": "table hu"
   },
   {
     "_id": "69cae935faa9b4696fad1e04",
@@ -43,5 +44,14 @@
     "status": "available",
     "isDefault": false,
     "createdAt": "2026-03-30T21:20:54.247Z"
+  },
+  {
+    "_id": "69ceb1b8e895cca03f53cb3f",
+    "restaurantId": "69cacc0d0444d0445a480b51",
+    "number": 28,
+    "capacity": 2,
+    "status": "available",
+    "isDefault": false,
+    "createdAt": "2026-04-02T18:13:12.138Z"
   }
 ]

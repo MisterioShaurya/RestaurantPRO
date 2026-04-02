@@ -82,6 +82,12 @@ export default function TablesPage() {
   const [editingTable, setEditingTable] = useState<Table | null>(null)
   const [editTableName, setEditTableName] = useState<string>('')
   
+  // Bulk table creation
+  const [bulkTableCount, setBulkTableCount] = useState<number>(1)
+  const [bulkStartNumber, setBulkStartNumber] = useState<number>(1)
+  const [bulkCapacity, setBulkCapacity] = useState<number>(4)
+  const [isBulkMode, setIsBulkMode] = useState<boolean>(false)
+  
   // Resizable section widths (modal only)
   const [menuWidth, setMenuWidth] = useState(50)  // percentage of modal
   const [cartWidth, setCartWidth] = useState(50)  // percentage of modal
@@ -98,6 +104,12 @@ export default function TablesPage() {
     : selectedTable
     ? tableOrders[selectedTable._id]
     : null
+
+  // Load tables and menu on mount
+  useEffect(() => {
+    loadLocalTables()
+    loadLocalMenu()
+  }, [])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -206,18 +218,30 @@ export default function TablesPage() {
   }
 
   const updateTableStatus = async (tableId: string, status: string) => {
-    // Update local state
+    // Update local state immediately for responsiveness
     setTables((prev) =>
       prev.map((t) => (t._id === tableId ? { ...t, status: status as any } : t))
     )
     
     // Sync to database
     try {
-      await fetch('/api/tables', {
+      const res = await fetch('/api/tables', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tableId, status })
       })
+      
+      if (res.ok) {
+        const data = await res.json()
+        // Update local state with the returned data from database
+        if (data.table) {
+          setTables((prev) =>
+            prev.map((t) => (t._id === tableId ? data.table : t))
+          )
+        }
+      } else {
+        console.error('Failed to update table status:', await res.text())
+      }
     } catch (err) {
       console.error('Failed to update table status:', err)
     }
@@ -801,6 +825,51 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
     }
   }
 
+  const createBulkTables = async () => {
+    if (bulkTableCount <= 0 || bulkStartNumber <= 0) {
+      alert('Please enter valid values for table count and start number')
+      return
+    }
+
+    // Check for duplicate table numbers
+    const existingNumbers = tables.map(t => t.number)
+    const newNumbers = Array.from({ length: bulkTableCount }, (_, i) => bulkStartNumber + i)
+    const duplicates = newNumbers.filter(n => existingNumbers.includes(n))
+    
+    if (duplicates.length > 0) {
+      alert(`Table numbers already exist: ${duplicates.join(', ')}. Please choose different numbers.`)
+      return
+    }
+
+    try {
+      const tablesToCreate = newNumbers.map(num => ({
+        number: num,
+        capacity: bulkCapacity,
+        tableName: `Table ${num}`,
+      }))
+
+      const res = await fetch('/api/tables', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tables: tablesToCreate }),
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        setTables([...tables, ...data.tables])
+        setBulkTableCount(1)
+        setBulkStartNumber(1)
+        setBulkCapacity(4)
+        setIsBulkMode(false)
+        setShowTableForm(false)
+        alert(`${data.tables.length} tables created successfully!`)
+      }
+    } catch (err) {
+      console.log('Error creating bulk tables:', err)
+      alert('Failed to create tables')
+    }
+  }
+
   const deleteTable = async (tableId: string) => {
     const table = tables.find(t => t._id === tableId)
     
@@ -849,11 +918,21 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
       })
 
       if (res.ok) {
-        setTables(tables.map(t => 
-          t._id === editingTable._id 
-            ? { ...t, tableName: editTableName.trim() }
-            : t
-        ))
+        const data = await res.json()
+        // Update local state with the returned data from database
+        if (data.table) {
+          setTables(tables.map(t => 
+            t._id === editingTable._id 
+              ? data.table
+              : t
+          ))
+        } else {
+          setTables(tables.map(t => 
+            t._id === editingTable._id 
+              ? { ...t, tableName: editTableName.trim() }
+              : t
+          ))
+        }
         setEditingTable(null)
         setEditTableName('')
         alert('Table name updated successfully!')
@@ -923,45 +1002,115 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
             {/* Add/Delete Tables Form */}
             {showTableForm && (
               <div className="bg-white p-4 rounded-lg border border-gray-300">
-                <h3 className="text-gray-900 font-bold mb-3">Add New Table</h3>
-                <div className="grid grid-cols-3 gap-3 mb-3">
-                  <div>
-                    <label className="block text-gray-700 text-sm font-semibold mb-1">Table Number</label>
-                    <input
-                      type="number"
-                      placeholder="e.g., 1, 2, 3"
-                      value={newTableNum}
-                      onChange={(e) => setNewTableNum(parseInt(e.target.value) || 0)}
-                      className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm font-semibold mb-1">Table Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g., VIP Table"
-                      value={newTableName}
-                      onChange={(e) => setNewTableName(e.target.value)}
-                      className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm font-semibold mb-1">Seats</label>
-                    <input
-                      type="number"
-                      placeholder="e.g., 4"
-                      value={newTableCapacity}
-                      onChange={(e) => setNewTableCapacity(parseInt(e.target.value) || 2)}
-                      className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
-                    />
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-gray-900 font-bold">Add New Table</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setIsBulkMode(false)}
+                      className={`px-3 py-1 rounded-lg text-sm font-semibold transition ${!isBulkMode ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                    >
+                      Single
+                    </button>
+                    <button
+                      onClick={() => setIsBulkMode(true)}
+                      className={`px-3 py-1 rounded-lg text-sm font-semibold transition ${isBulkMode ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                    >
+                      Bulk
+                    </button>
                   </div>
                 </div>
-                <button
-                  onClick={createTable}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition shadow-md active:scale-95"
-                >
-                  Create Table
-                </button>
+                
+                {!isBulkMode ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-3 mb-3">
+                      <div>
+                        <label className="block text-gray-700 text-sm font-semibold mb-1">Table Number</label>
+                        <input
+                          type="number"
+                          placeholder="e.g., 1, 2, 3"
+                          value={newTableNum}
+                          onChange={(e) => setNewTableNum(parseInt(e.target.value) || 0)}
+                          className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-700 text-sm font-semibold mb-1">Table Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g., VIP Table"
+                          value={newTableName}
+                          onChange={(e) => setNewTableName(e.target.value)}
+                          className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-700 text-sm font-semibold mb-1">Seats</label>
+                        <input
+                          type="number"
+                          placeholder="e.g., 4"
+                          value={newTableCapacity}
+                          onChange={(e) => setNewTableCapacity(parseInt(e.target.value) || 2)}
+                          className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={createTable}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition shadow-md active:scale-95"
+                    >
+                      Create Table
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-3 gap-3 mb-3">
+                      <div>
+                        <label className="block text-gray-700 text-sm font-semibold mb-1">Number of Tables</label>
+                        <input
+                          type="number"
+                          placeholder="e.g., 5"
+                          value={bulkTableCount}
+                          onChange={(e) => setBulkTableCount(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
+                          min="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-700 text-sm font-semibold mb-1">Start Number</label>
+                        <input
+                          type="number"
+                          placeholder="e.g., 1"
+                          value={bulkStartNumber}
+                          onChange={(e) => setBulkStartNumber(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
+                          min="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-gray-700 text-sm font-semibold mb-1">Seats per Table</label>
+                        <input
+                          type="number"
+                          placeholder="e.g., 4"
+                          value={bulkCapacity}
+                          onChange={(e) => setBulkCapacity(Math.max(1, parseInt(e.target.value) || 4))}
+                          className="w-full bg-white text-black px-3 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-300 outline-none"
+                          min="1"
+                        />
+                      </div>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 mb-3">
+                      <p className="text-blue-800 text-sm">
+                        <strong>Preview:</strong> Will create tables {bulkStartNumber} to {bulkStartNumber + bulkTableCount - 1} ({bulkTableCount} tables with {bulkCapacity} seats each)
+                      </p>
+                    </div>
+                    <button
+                      onClick={createBulkTables}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition shadow-md active:scale-95"
+                    >
+                      Create {bulkTableCount} Tables
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
