@@ -1,20 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { AlertTriangle, X, Clock, CreditCard, CheckCircle } from 'lucide-react'
+import { AlertCircle, X, Clock, Shield, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
+import { Subscription } from '@/lib/types'
+
 interface SubscriptionBannerProps {
-  subscription: {
-    status: 'ACTIVE' | 'EXPIRED' | 'GRACE_PERIOD' | 'SUSPENDED'
-    type: 'MONTHLY' | 'YEARLY'
-    expiresAt: string
-    gracePeriodEndsAt?: string
-  }
+  subscription: Subscription
   onRenewal?: () => void
 }
 
@@ -24,51 +21,43 @@ export function SubscriptionBanner({ subscription, onRenewal }: SubscriptionBann
   const [unlockError, setUnlockError] = useState('')
   const [unlocking, setUnlocking] = useState(false)
 
-  const isExpired = subscription.status === 'EXPIRED'
-  const isGracePeriod = subscription.status === 'GRACE_PERIOD'
-  const isSuspended = subscription.status === 'SUSPENDED'
+  const isRestricted = subscription.status === 'RESTRICTED'
+  const isGrace = subscription.status === 'GRACE'
+  const isActive = subscription.status === 'ACTIVE'
 
   const getBannerContent = () => {
-    if (isExpired) {
+    if (isRestricted) {
       return {
-        icon: <AlertTriangle className="h-4 w-4" />,
-        title: 'Subscription Expired',
-        message: 'Your subscription has expired. Enter unlock code to continue.',
+        icon: <AlertCircle className="h-4 w-4" />,
+        title: 'Subscription Restricted',
+        message: 'Your subscription has been restricted. Enter unlock code to continue.',
         variant: 'destructive' as const,
         action: 'Unlock'
       }
     }
 
-    if (isGracePeriod) {
-      const daysLeft = Math.ceil((new Date(subscription.gracePeriodEndsAt!).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    if (isGrace) {
+      const daysLeft = Math.ceil((new Date(subscription.subscription_expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
       return {
         icon: <Clock className="h-4 w-4" />,
-        title: 'Subscription Grace Period',
-        message: `Your subscription expired. You have ${daysLeft} days left in grace period.`,
-        variant: 'default' as const,
-        action: 'Renew Now'
-      }
-    }
-
-    if (isSuspended) {
-      return {
-        icon: <AlertTriangle className="h-4 w-4" />,
-        title: 'Subscription Suspended',
-        message: 'Your subscription has been suspended. Contact support.',
-        variant: 'destructive' as const,
-        action: null
-      }
-    }
-
-    // Active subscription - show renewal reminder if expiring soon
-    const daysUntilExpiry = Math.ceil((new Date(subscription.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    if (daysUntilExpiry <= 7) {
-      return {
-        icon: <CreditCard className="h-4 w-4" />,
         title: 'Subscription Expiring Soon',
-        message: `Your ${subscription.type.toLowerCase()} subscription expires in ${daysUntilExpiry} days.`,
+        message: `Your subscription expires in ${daysLeft} days. Renew to continue using all features.`,
         variant: 'default' as const,
         action: 'Renew Now'
+      }
+    }
+
+    if (isActive) {
+      // Active subscription - show renewal reminder if expiring soon
+      const daysUntilExpiry = Math.ceil((new Date(subscription.subscription_expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      if (daysUntilExpiry <= 7) {
+        return {
+          icon: <Shield className="h-4 w-4" />,
+          title: 'Subscription Expiring Soon',
+          message: `Your ${subscription.subscription_type.toLowerCase()} subscription expires in ${daysUntilExpiry} days.`,
+          variant: 'default' as const,
+          action: 'Renew Now'
+        }
       }
     }
 
@@ -115,7 +104,7 @@ export function SubscriptionBanner({ subscription, onRenewal }: SubscriptionBann
   }
 
   const handleAction = () => {
-    if (isExpired) {
+    if (isRestricted) {
       setShowUnlockModal(true)
     } else {
       onRenewal?.()

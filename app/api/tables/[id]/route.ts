@@ -29,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params
     const { status } = await req.json()
     const client = await getMongoClient()
-    const db = client.db('restaurant_pro')
+    const db = client.db('restaurant_pos')
 
     const result = await db.collection('tables').updateOne(
       { _id: new ObjectId(id) },

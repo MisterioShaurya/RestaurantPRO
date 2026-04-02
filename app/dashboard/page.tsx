@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation'
 import SideNav from '@/components/dashboard/sidenav'
 import DashboardHeader from '@/components/dashboard/header'
 import DashboardHome from '@/components/dashboard/home'
+import { persistentUserStorage } from '@/lib/persistent-user-storage'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const hasCheckedAuth = useRef(false)
@@ -21,6 +22,15 @@ export default function DashboardPage() {
       hasCheckedAuth.current = true
 
       try {
+        // First check for offline user (persistent storage)
+        const offlineUser = persistentUserStorage.getCurrentUser()
+        if (offlineUser) {
+          console.log('[Dashboard] Found offline user:', offlineUser.email)
+          setUser(offlineUser)
+          setLoading(false)
+          return
+        }
+
         // Check if user is authenticated via JWT token
         const token = localStorage.getItem('token')
         if (!token) {

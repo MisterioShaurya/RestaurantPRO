@@ -29,6 +29,7 @@ export default function SideNav({ isOpen, onToggle }: SideNavProps) {
   const adminMenu = [
     { label: 'Dashboard', href: '/dashboard', icon: '📊', color: 'blue' },
     { label: 'Tables', href: '/dashboard/tables', icon: '🍽️', color: 'orange' },
+    { label: 'Manage Tables', href: '/dashboard/manage-tables', icon: '⚙️', color: 'slate' },
     { label: 'Menu Items', href: '/dashboard/menu', icon: '📜', color: 'amber' },
     { label: 'Orders', href: '/dashboard/orders', icon: '📋', color: 'cyan' },
     { label: 'Inventory', href: '/dashboard/inventory', icon: '📦', color: 'pink' },

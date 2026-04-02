@@ -1,32 +1,28 @@
 'use client'
 
 import { useState } from 'react'
-import { CreditCard, AlertTriangle, CheckCircle, X } from 'lucide-react'
+import { Shield, AlertCircle, CheckCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
+import { Subscription } from '@/lib/types'
+
 interface SubscriptionRenewalNoticeProps {
-  subscription: {
-    status: 'ACTIVE' | 'EXPIRED' | 'GRACE_PERIOD' | 'SUSPENDED'
-    type: 'MONTHLY' | 'YEARLY'
-    expiresAt: string
-    gracePeriodEndsAt?: string
-  }
+  subscription: Subscription
   onRenewal?: () => void
 }
 
 export function SubscriptionRenewalNotice({ subscription, onRenewal }: SubscriptionRenewalNoticeProps) {
   const [showRenewalModal, setShowRenewalModal] = useState(false)
-  const [renewalType, setRenewalType] = useState<'MONTHLY' | 'YEARLY'>(subscription.type)
+  const [renewalType, setRenewalType] = useState<'MONTHLY' | 'YEARLY'>(subscription.subscription_type)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
 
-  const isExpired = subscription.status === 'EXPIRED'
-  const isGracePeriod = subscription.status === 'GRACE_PERIOD'
-  const isSuspended = subscription.status === 'SUSPENDED'
+  const isRestricted = subscription.status === 'RESTRICTED'
+  const isGrace = subscription.status === 'GRACE'
 
   const getPricing = (type: 'MONTHLY' | 'YEARLY') => {
     return type === 'MONTHLY' ? 999 : 9999
@@ -64,28 +60,20 @@ export function SubscriptionRenewalNotice({ subscription, onRenewal }: Subscript
   }
 
   const getNoticeContent = () => {
-    if (isExpired) {
+    if (isRestricted) {
       return {
-        title: 'Subscription Expired',
-        message: 'Your subscription has expired. Renew now to continue using all features.',
+        title: 'Subscription Restricted',
+        message: 'Your subscription has been restricted. Renew now to continue using all features.',
         severity: 'high' as const
       }
     }
 
-    if (isGracePeriod) {
-      const daysLeft = Math.ceil((new Date(subscription.gracePeriodEndsAt!).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    if (isGrace) {
+      const daysLeft = Math.ceil((new Date(subscription.subscription_expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
       return {
-        title: 'Grace Period Active',
-        message: `You have ${daysLeft} days left in your grace period. Renew now to avoid service interruption.`,
+        title: 'Subscription Expiring Soon',
+        message: `You have ${daysLeft} days left before your subscription expires. Renew now to avoid service interruption.`,
         severity: 'medium' as const
-      }
-    }
-
-    if (isSuspended) {
-      return {
-        title: 'Subscription Suspended',
-        message: 'Your subscription has been suspended. Please contact support to resolve this issue.',
-        severity: 'high' as const
       }
     }
 
@@ -105,7 +93,7 @@ export function SubscriptionRenewalNotice({ subscription, onRenewal }: Subscript
       }`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertTriangle className={`h-4 w-4 ${
+            <AlertCircle className={`h-4 w-4 ${
               noticeContent.severity === 'high' ? 'text-red-600' : 'text-yellow-600'
             }`} />
             <div>
@@ -117,16 +105,14 @@ export function SubscriptionRenewalNotice({ subscription, onRenewal }: Subscript
               </AlertDescription>
             </div>
           </div>
-          {!isSuspended && (
-            <Button
-              size="sm"
-              variant={noticeContent.severity === 'high' ? 'destructive' : 'default'}
-              onClick={() => setShowRenewalModal(true)}
-            >
-              <CreditCard className="h-4 w-4 mr-1" />
-              Renew Now
-            </Button>
-          )}
+          <Button
+            size="sm"
+            variant={noticeContent.severity === 'high' ? 'destructive' : 'default'}
+            onClick={() => setShowRenewalModal(true)}
+          >
+            <Shield className="h-4 w-4 mr-1" />
+            Renew Now
+          </Button>
         </div>
       </Alert>
 
@@ -135,14 +121,14 @@ export function SubscriptionRenewalNotice({ subscription, onRenewal }: Subscript
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-blue-600" />
+              <Shield className="h-5 w-5 text-blue-600" />
               Renew Subscription
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
-              <Label>Current Plan: {subscription.type}</Label>
+              <Label>Current Plan: {subscription.subscription_type}</Label>
               <p className="text-sm text-gray-600 mt-1">
                 Choose your renewal plan
               </p>

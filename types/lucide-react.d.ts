@@ -1,12 +1,12 @@
 declare module 'lucide-react' {
   import { FC, SVGProps } from 'react'
-  
+
   interface IconProps extends SVGProps<SVGSVGElement> {
     size?: number | string
     color?: string
     strokeWidth?: number | string
   }
-  
+
   export const Plus: FC<IconProps>
   export const Edit2: FC<IconProps>
   export const Trash2: FC<IconProps>
@@ -59,4 +59,12 @@ declare module 'lucide-react' {
   export const Loader2: FC<IconProps>
   export const Monitor: FC<IconProps>
   export const Smartphone: FC<IconProps>
+  export const Lock: FC<IconProps>
+  export const Zap: FC<IconProps>
+  export const Globe: FC<IconProps>
+  export const Award: FC<IconProps>
+  export const TrendingUp: FC<IconProps>
+  export const ShieldCheck: FC<IconProps>
+  export const CreditCard: FC<IconProps>
+  export const Headphones: FC<IconProps>
 }

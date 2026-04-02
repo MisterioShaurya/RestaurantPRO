@@ -1,20 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { Lock, AlertTriangle, CreditCard, Key } from 'lucide-react'
+import { Shield, AlertCircle, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
+import { Subscription } from '@/lib/types'
+
 interface RestrictedModeProps {
-  subscription: {
-    status: 'ACTIVE' | 'EXPIRED' | 'GRACE_PERIOD' | 'SUSPENDED'
-    type: 'MONTHLY' | 'YEARLY'
-    expiresAt: string
-    gracePeriodEndsAt?: string
-  }
+  subscription: Subscription
   onRenewal?: () => void
   children: React.ReactNode
 }
@@ -23,15 +20,15 @@ export function RestrictedMode({ subscription, onRenewal, children }: Restricted
   const [showUnlockModal, setShowUnlockModal] = useState(false)
   const [showRenewalModal, setShowRenewalModal] = useState(false)
   const [unlockCode, setUnlockCode] = useState('')
-  const [renewalType, setRenewalType] = useState<'MONTHLY' | 'YEARLY'>(subscription.type)
+  const [renewalType, setRenewalType] = useState<'MONTHLY' | 'YEARLY'>(subscription.subscription_type)
   const [unlockError, setUnlockError] = useState('')
   const [renewalError, setRenewalError] = useState('')
   const [unlocking, setUnlocking] = useState(false)
   const [renewing, setRenewing] = useState(false)
 
-  const isExpired = subscription.status === 'EXPIRED'
-  const isSuspended = subscription.status === 'SUSPENDED'
-  const isRestricted = isExpired || isSuspended
+  const isRestrictedStatus = subscription.status === 'RESTRICTED'
+  const isGraceStatus = subscription.status === 'GRACE'
+  const shouldShowRestricted = isRestrictedStatus || isGraceStatus
 
   const getPricing = (type: 'MONTHLY' | 'YEARLY') => {
     return type === 'MONTHLY' ? 999 : 9999
@@ -99,7 +96,7 @@ export function RestrictedMode({ subscription, onRenewal, children }: Restricted
     }
   }
 
-  if (!isRestricted) {
+  if (!shouldShowRestricted) {
     return <>{children}</>
   }
 
@@ -111,43 +108,41 @@ export function RestrictedMode({ subscription, onRenewal, children }: Restricted
           <div className="text-center mb-6">
             <div className="flex justify-center mb-4">
               <div className="p-3 bg-red-100 rounded-full">
-                <Lock className="h-8 w-8 text-red-600" />
+                <Shield className="h-8 w-8 text-red-600" />
               </div>
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">
-              {isSuspended ? 'Subscription Suspended' : 'Subscription Expired'}
+              {isGraceStatus ? 'Subscription Expiring Soon' : 'Subscription Restricted'}
             </h2>
             <p className="text-gray-600">
-              {isSuspended
-                ? 'Your subscription has been suspended. Please contact support or renew to continue.'
-                : 'Your subscription has expired. Renew now or enter an unlock code to continue using essential features.'
+              {isGraceStatus
+                ? 'Your subscription is expiring soon. Renew now to continue using all features.'
+                : 'Your subscription has been restricted. Renew or enter an unlock code to continue using essential features.'
               }
             </p>
           </div>
 
           <div className="space-y-3">
-            {!isSuspended && (
-              <Button
-                onClick={() => setShowUnlockModal(true)}
-                className="w-full"
-                variant="outline"
-              >
-                <Key className="h-4 w-4 mr-2" />
-                Enter Unlock Code
-              </Button>
-            )}
+            <Button
+              onClick={() => setShowUnlockModal(true)}
+              className="w-full"
+              variant="outline"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Enter Unlock Code
+            </Button>
 
             <Button
               onClick={() => setShowRenewalModal(true)}
               className="w-full bg-blue-600 hover:bg-blue-700"
             >
-              <CreditCard className="h-4 w-4 mr-2" />
+              <Shield className="h-4 w-4 mr-2" />
               Renew Subscription
             </Button>
           </div>
 
           <Alert className="mt-4 border-yellow-200 bg-yellow-50">
-            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <AlertCircle className="h-4 w-4 text-yellow-600" />
             <AlertDescription className="text-yellow-800">
               <strong>Essential features only:</strong> You can still process orders and manage basic operations, but advanced features are restricted.
             </AlertDescription>
@@ -165,7 +160,7 @@ export function RestrictedMode({ subscription, onRenewal, children }: Restricted
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5 text-blue-600" />
+              <CheckCircle className="h-5 w-5 text-blue-600" />
               Enter Unlock Code
             </DialogTitle>
           </DialogHeader>
@@ -209,7 +204,7 @@ export function RestrictedMode({ subscription, onRenewal, children }: Restricted
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-blue-600" />
+              <Shield className="h-5 w-5 text-blue-600" />
               Renew Subscription
             </DialogTitle>
           </DialogHeader>
