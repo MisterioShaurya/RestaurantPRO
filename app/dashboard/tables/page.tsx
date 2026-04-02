@@ -137,7 +137,11 @@ export default function TablesPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showBillingModal, currentCart, currentOrderState])
 
-
+  // Load tables and menu on mount
+  useEffect(() => {
+    loadLocalTables()
+    loadLocalMenu()
+  }, [])
 
   const handleModalDividerMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -1942,3 +1946,4 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
     </>
   )
 }
+
