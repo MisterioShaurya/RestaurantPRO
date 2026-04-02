@@ -78,7 +78,7 @@ export async function GET(req: Request) {
       }
     }
 
-    // Format response
+    // Format response with payment status
     const recentOrders = orders.slice(0, 5).map((order: any) => {
       let createdAtStr = new Date().toISOString()
       if (order.createdAt) {
@@ -94,13 +94,18 @@ export async function GET(req: Request) {
           createdAtStr = new Date(order.createdAt.$date).toISOString()
         }
       }
+      
+      // Determine payment status
+      const isPaid = order.status === 'completed' || order.paymentStatus === 'paid'
+      const displayStatus = isPaid ? 'paid' : 'pending'
+      
       return {
         id: order._id?.toString() || order.id || '',
         tableNumber: order.tableNumber,
         customerName: order.customerName,
         total: order.total || 0,
         subtotal: order.subtotal,
-        status: order.status || 'pending',
+        status: displayStatus,
         createdAt: createdAtStr,
       }
     })

@@ -78,6 +78,26 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await db.collection('bills').insertOne(billData)
+    
+    // Update the order status to 'completed' when bill is created
+    if (tableNumber) {
+      await db.collection('orders').updateMany(
+        { 
+          restaurantId,
+          tableNumber: Number(tableNumber),
+          status: { $ne: 'completed' }
+        },
+        { 
+          $set: { 
+            status: 'completed',
+            paymentStatus: 'paid',
+            paymentMode: paymentMode || null,
+            updatedAt: new Date().toISOString()
+          } 
+        }
+      )
+    }
+    
     const bill = await db.collection('bills').findOne({ _id: result.insertedId })
     const normalized = bill ? { ...bill, _id: bill._id.toString(), createdAt: bill.createdAt instanceof Date ? bill.createdAt.toISOString() : bill.createdAt, updatedAt: bill.updatedAt instanceof Date ? bill.updatedAt.toISOString() : bill.updatedAt } : null
 

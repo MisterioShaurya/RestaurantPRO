@@ -130,15 +130,7 @@ export default function ManageTablesPage() {
   }
 
   const deleteTable = async (tableId: string) => {
-    const table = tables.find(t => t._id === tableId)
-    
-    // Prevent deleting default tables
-    if (table?.isDefault) {
-      alert('Cannot delete default tables. Default tables are permanent and cannot be removed.')
-      return
-    }
-
-    if (!confirm('Are you sure you want to delete this table?')) return
+    if (!confirm('Are you sure you want to delete this table? This action cannot be undone.')) return
 
     try {
       const res = await fetch(`/api/tables/${tableId}`, {
@@ -403,15 +395,13 @@ export default function ManageTablesPage() {
                   >
                     <Edit2 size={14} />
                   </button>
-                  {!table.isDefault && (
-                    <button
-                      onClick={() => deleteTable(table._id)}
-                      className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-lg shadow-md"
-                      title="Delete table"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => deleteTable(table._id)}
+                    className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-lg shadow-md"
+                    title="Delete table"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             ))}
