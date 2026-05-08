@@ -203,7 +203,7 @@ Small: text-xs (slate-400 dark)
 
 **AFTER**:
 ```
-H1: text-5xl font-bold text-gray-900
+H1: text-4xl font-bold text-gray-900
 H2: text-3xl font-bold text-gray-900
 Paragraph: text-lg text-gray-700
 Small: text-sm text-gray-600

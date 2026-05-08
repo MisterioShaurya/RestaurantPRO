@@ -34,7 +34,7 @@ export default function RootLayout({
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="font-sans">
         {children}
-        <Watermark />
+        {/* Watermark component handles showing/hiding based on route internally */}
       </body>
     </html>
   )

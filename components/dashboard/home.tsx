@@ -66,7 +66,7 @@ export default function DashboardHome({ user }: { user: any }) {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-yellow-50 to-orange-50 p-4 sm:p-6 lg:p-8">
       {/* Welcome Section */}
       <div className="mb-10 animate-slide-up">
-        <h1 className="text-5xl font-bold text-gray-900 mb-2">👋 Welcome back, {user?.name || 'Admin'}!</h1>
+        <h1 className="text-4xl font-bold text-gray-900 mb-2">👋 Welcome back, {user?.name || 'Admin'}!</h1>
         <p className="text-lg text-gray-600">Here's what's happening at your restaurant today</p>
       </div>
 
@@ -106,7 +106,7 @@ export default function DashboardHome({ user }: { user: any }) {
             >
               <div className={`absolute inset-0 bg-gradient-to-br from-${action.color}-50 to-${action.color}-100 opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
               <div className="relative">
-                <div className="text-5xl mb-3 group-hover:scale-125 transition-transform duration-300">{action.icon}</div>
+                <div className="text-4xl mb-3 group-hover:scale-125 transition-transform duration-300">{action.icon}</div>
                 <p className="font-bold text-lg text-gray-900 mb-1 group-hover:text-${action.color}-600 transition-colors">{action.title}</p>
                 <p className="text-sm text-gray-600 group-hover:text-gray-700">{action.desc}</p>
               </div>

@@ -285,7 +285,7 @@ rounded-3xl:   1.5rem (24px) - large containers
 ## Typography Scale
 
 ```
-H1: text-5xl font-bold (48px, bold)
+H1: text-4xl font-bold (48px, bold)
 H2: text-3xl font-bold (30px, bold)
 H3: text-2xl font-bold (24px, bold)
 Body: text-base (16px, normal)
@@ -428,7 +428,7 @@ Padding:
 ### Hero Section
 ```html
 <div class="bg-gradient-to-br from-slate-50 via-yellow-50 to-orange-50 p-8">
-  <h1 class="text-5xl font-bold text-gray-900 mb-2">Title</h1>
+  <h1 class="text-4xl font-bold text-gray-900 mb-2">Title</h1>
   <p class="text-lg text-gray-600">Description</p>
 </div>
 ```

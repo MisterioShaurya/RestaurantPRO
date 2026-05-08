@@ -2,26 +2,33 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Lock, Mail, AlertCircle, CheckCircle, UserPlus, Eye, EyeOff, Loader } from 'lucide-react'
-import DesktopOnlyWrapper from '@/components/desktop-only-wrapper'
+import { Lock, Mail, AlertCircle, CheckCircle, Eye, EyeOff, Loader, ChefHat, Star } from 'lucide-react'
+import Link from 'next/link'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [isLogin, setIsLogin] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [formData, setFormData] = useState({
-    username: '',
     email: '',
     password: '',
-    passwordConfirm: '',
-    restaurantName: '',
-    subscriptionType: 'MONTHLY' as 'MONTHLY' | 'YEARLY'
   })
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Lavender color palette matching landing page
+  const lavender = {
+    primary: '#9B7EC8',
+    light: '#E8E0F0',
+    lighter: '#F5F0FA',
+    dark: '#7B5FA8',
+    darkest: '#5B3F78',
+    accent: '#C4A7E0',
+    text: '#2D1B4E',
+    textLight: '#6B5B7B',
+    white: '#FFFFFF',
+  }
 
   // Check if user is already logged in
   useEffect(() => {
@@ -33,22 +40,9 @@ export default function LoginPage() {
 
   const validateForm = () => {
     const errors: Record<string, string> = {}
-
-    if (!isLogin) {
-      if (!formData.username.trim()) errors.username = 'Username is required'
-      if (!formData.email.trim()) errors.email = 'Email is required'
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = 'Invalid email format'
-      if (!formData.password) errors.password = 'Password is required'
-      else if (formData.password.length < 6) errors.password = 'Password must be at least 6 characters'
-      if (!formData.passwordConfirm) errors.passwordConfirm = 'Please confirm your password'
-      else if (formData.password !== formData.passwordConfirm) errors.passwordConfirm = 'Passwords do not match'
-      if (!formData.restaurantName.trim()) errors.restaurantName = 'Restaurant name is required'
-    } else {
-      if (!formData.email.trim()) errors.email = 'Email is required'
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = 'Invalid email format'
-      if (!formData.password) errors.password = 'Password is required'
-    }
-
+    if (!formData.email.trim()) errors.email = 'Email is required'
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) errors.email = 'Invalid email format'
+    if (!formData.password) errors.password = 'Password is required'
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -66,60 +60,31 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup'
-      const payload = isLogin
-        ? { email: formData.email, password: formData.password }
-        : {
-            username: formData.username,
-            email: formData.email,
-            password: formData.password,
-            passwordConfirm: formData.passwordConfirm,
-            restaurantName: formData.restaurantName,
-            subscriptionType: formData.subscriptionType
-          }
-
-      const response = await fetch(endpoint, {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(formData),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        setError(data.message || 'Authentication failed')
+        setError(data.message || 'Login failed')
         return
       }
 
-      if (isLogin) {
-        // Store JWT token and user data in localStorage
-        localStorage.setItem('token', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
-        
-        // Also store in cookies for server-side authentication
-        document.cookie = `token=${data.token}; path=/; max-age=${24 * 60 * 60}; SameSite=Lax`
-        document.cookie = `userRole=${data.user.role || 'admin'}; path=/; max-age=${24 * 60 * 60}; SameSite=Lax`
+      // Store JWT token and user data in localStorage
+      localStorage.setItem('token', data.token)
+      localStorage.setItem('user', JSON.stringify(data.user))
+      
+      // Also store in cookies for server-side authentication
+      document.cookie = `token=${data.token}; path=/; max-age=${24 * 60 * 60}; SameSite=Lax`
+      document.cookie = `userRole=${data.user.role || 'admin'}; path=/; max-age=${24 * 60 * 60}; SameSite=Lax`
 
-        setSuccess('Login successful! Redirecting...')
-        setTimeout(() => {
-          router.push('/dashboard')
-        }, 1500)
-      } else {
-        setSuccess('Account created successfully! Switching to login...')
-        setTimeout(() => {
-          setIsLogin(true)
-          setFormData({
-            username: '',
-            email: '',
-            password: '',
-            passwordConfirm: '',
-            restaurantName: '',
-            subscriptionType: 'MONTHLY'
-          })
-          setFieldErrors({})
-          setSuccess('')
-        }, 2000)
-      }
+      setSuccess('Login successful! Redirecting...')
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 1500)
     } catch (err) {
       setError('Network error. Please check your connection.')
       console.error(err)
@@ -140,68 +105,43 @@ export default function LoginPage() {
   }
 
   return (
-    <DesktopOnlyWrapper>
-    <div className="min-h-screen bg-linear-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
-      {/* Animated background elements */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden" style={{ background: lavender.lighter }}>
+      {/* Background Decorative Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-96 h-96 rounded-full opacity-20 blur-3xl" 
+             style={{ background: `radial-gradient(circle, ${lavender.accent}, transparent)` }}></div>
+        <div className="absolute bottom-20 right-10 w-[400px] h-[400px] rounded-full opacity-15 blur-3xl" 
+             style={{ background: `radial-gradient(circle, ${lavender.primary}, transparent)` }}></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full opacity-10 blur-3xl" 
+             style={{ background: `radial-gradient(circle, ${lavender.light}, transparent)` }}></div>
       </div>
 
       <div className="relative w-full max-w-md">
         {/* Main Card */}
-        <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-white/10">
+        <div className="rounded-2xl shadow-2xl p-8 relative overflow-hidden" 
+             style={{ background: `${lavender.white}ee`, backdropFilter: 'blur(20px)', border: `1px solid ${lavender.primary}20` }}>
+          
+          {/* Decorative top accent */}
+          <div className="absolute top-0 left-0 right-0 h-1" 
+               style={{ background: `linear-gradient(90deg, ${lavender.primary}, ${lavender.accent}, ${lavender.primary})` }}></div>
+
           {/* Logo Section */}
           <div className="text-center mb-8">
-            <div className="inline-block p-3 bg-linear-to-br from-blue-500 to-blue-600 rounded-xl mb-4">
-              <Lock className="text-white" size={24} />
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+                 style={{ background: `linear-gradient(135deg, ${lavender.primary}, ${lavender.accent})` }}>
+              <ChefHat className="text-white" size={28} />
             </div>
-            <h1 className="text-3xl font-bold text-slate-900">
-              {isLogin ? 'Welcome Back' : 'Create Account'}
+            <h1 className="text-3xl font-bold" style={{ fontFamily: 'Playfair Display, serif', color: lavender.text }}>
+              Welcome Back
             </h1>
-            <p className="text-slate-600 text-sm mt-2">
-              {isLogin
-                ? 'Sign in to your restaurant dashboard'
-                : 'Set up your restaurant management system'
-              }
+            <p className="text-sm mt-2" style={{ color: lavender.textLight, fontFamily: 'DM Sans, sans-serif' }}>
+              Sign in to your restaurant dashboard
             </p>
-          </div>
-
-          {/* Tab Selector */}
-          <div className="flex gap-2 mb-6 bg-slate-100 p-1 rounded-lg">
-            <button
-              onClick={() => {
-                setIsLogin(true)
-                setError('')
-                setFieldErrors({})
-              }}
-              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all duration-200 ${
-                isLogin
-                  ? 'bg-white text-blue-600 shadow-md'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => {
-                setIsLogin(false)
-                setError('')
-                setFieldErrors({})
-              }}
-              className={`flex-1 py-2 px-4 rounded-md font-medium transition-all duration-200 ${
-                !isLogin
-                  ? 'bg-white text-blue-600 shadow-md'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Sign Up
-            </button>
           </div>
 
           {/* Success Message */}
           {success && (
-            <div className="flex gap-3 p-3 bg-green-50 border border-green-200 rounded-lg mb-4 animate-in fade-in">
+            <div className="flex gap-3 p-3 rounded-lg mb-4 animate-fadeIn" style={{ background: '#F0FFF4', border: '1px solid #C6F6D5' }}>
               <CheckCircle size={18} className="text-green-600 shrink-0 mt-0.5" />
               <p className="text-sm text-green-700 font-medium">{success}</p>
             </div>
@@ -209,78 +149,17 @@ export default function LoginPage() {
 
           {/* Error Message */}
           {error && (
-            <div className="flex gap-3 p-3 bg-red-50 border border-red-200 rounded-lg mb-4 animate-in fade-in">
+            <div className="flex gap-3 p-3 rounded-lg mb-4 animate-fadeIn" style={{ background: '#FFF5F5', border: '1px solid #FED7D7' }}>
               <AlertCircle size={18} className="text-red-600 shrink-0 mt-0.5" />
               <p className="text-sm text-red-700 font-medium">{error}</p>
             </div>
           )}
 
-          {/* Login/Signup Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
-              <>
-                {/* Username Field */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Username
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.username}
-                    onChange={(e) => handleInputChange('username', e.target.value)}
-                    className={`w-full px-4 py-3 rounded-lg border-2 transition-all duration-200 focus:outline-none ${
-                      fieldErrors.username
-                        ? 'border-red-300 bg-red-50/30 focus:border-red-500'
-                        : 'border-slate-200 focus:border-blue-500 focus:bg-blue-50/30'
-                    }`}
-                    placeholder="your_username"
-                  />
-                  {fieldErrors.username && (
-                    <p className="text-xs text-red-600 mt-1">{fieldErrors.username}</p>
-                  )}
-                </div>
-
-                {/* Restaurant Name Field */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Restaurant Name
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.restaurantName}
-                    onChange={(e) => handleInputChange('restaurantName', e.target.value)}
-                    className={`w-full px-4 py-3 rounded-lg border-2 transition-all duration-200 focus:outline-none ${
-                      fieldErrors.restaurantName
-                        ? 'border-red-300 bg-red-50/30 focus:border-red-500'
-                        : 'border-slate-200 focus:border-blue-500 focus:bg-blue-50/30'
-                    }`}
-                    placeholder="Your Restaurant"
-                  />
-                  {fieldErrors.restaurantName && (
-                    <p className="text-xs text-red-600 mt-1">{fieldErrors.restaurantName}</p>
-                  )}
-                </div>
-
-                {/* Subscription Type */}
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Plan
-                  </label>
-                  <select
-                    value={formData.subscriptionType}
-                    onChange={(e) => handleInputChange('subscriptionType', e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg border-2 border-slate-200 focus:border-blue-500 focus:outline-none focus:bg-blue-50/30 transition-all duration-200"
-                  >
-                    <option value="MONTHLY">Monthly - ₹999/month</option>
-                    <option value="YEARLY">Yearly - ₹9999/year (Save 17%)</option>
-                  </select>
-                </div>
-              </>
-            )}
-
+          {/* Login Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email Field */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold mb-2" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>
                 <span className="flex items-center gap-1">
                   <Mail size={16} /> Email
                 </span>
@@ -289,21 +168,33 @@ export default function LoginPage() {
                 type="email"
                 value={formData.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
-                className={`w-full px-4 py-3 rounded-lg border-2 transition-all duration-200 focus:outline-none ${
+                className={`w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none focus:scale-[1.02] ${
                   fieldErrors.email
-                    ? 'border-red-300 bg-red-50/30 focus:border-red-500'
-                    : 'border-slate-200 focus:border-blue-500 focus:bg-blue-50/30'
+                    ? 'border-red-300 bg-red-50/30'
+                    : ''
                 }`}
+                style={{ 
+                  borderColor: fieldErrors.email ? undefined : `${lavender.primary}30`,
+                  background: lavender.white,
+                  fontFamily: 'DM Sans',
+                  ...(fieldErrors.email ? {} : {})
+                }}
+                onFocus={(e) => {
+                  if (!fieldErrors.email) e.target.style.borderColor = lavender.primary
+                }}
+                onBlur={(e) => {
+                  if (!fieldErrors.email) e.target.style.borderColor = `${lavender.primary}30`
+                }}
                 placeholder="admin@restaurant.com"
               />
               {fieldErrors.email && (
-                <p className="text-xs text-red-600 mt-1">{fieldErrors.email}</p>
+                <p className="text-xs text-red-600 mt-1 font-medium">{fieldErrors.email}</p>
               )}
             </div>
 
             {/* Password Field */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+              <label className="block text-sm font-semibold mb-2" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>
                 <span className="flex items-center gap-1">
                   <Lock size={16} /> Password
                 </span>
@@ -313,104 +204,102 @@ export default function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
-                  className={`w-full px-4 py-3 pr-10 rounded-lg border-2 transition-all duration-200 focus:outline-none ${
-                    fieldErrors.password
-                      ? 'border-red-300 bg-red-50/30 focus:border-red-500'
-                      : 'border-slate-200 focus:border-blue-500 focus:bg-blue-50/30'
+                  className={`w-full px-4 py-3 pr-10 rounded-xl border-2 transition-all duration-300 focus:outline-none focus:scale-[1.02] ${
+                    fieldErrors.password ? 'border-red-300 bg-red-50/30' : ''
                   }`}
+                  style={{ 
+                    borderColor: fieldErrors.password ? undefined : `${lavender.primary}30`,
+                    background: lavender.white,
+                    fontFamily: 'DM Sans'
+                  }}
+                  onFocus={(e) => {
+                    if (!fieldErrors.password) e.target.style.borderColor = lavender.primary
+                  }}
+                  onBlur={(e) => {
+                    if (!fieldErrors.password) e.target.style.borderColor = `${lavender.primary}30`
+                  }}
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-200"
+                  style={{ color: lavender.textLight }}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
               {fieldErrors.password && (
-                <p className="text-xs text-red-600 mt-1">{fieldErrors.password}</p>
+                <p className="text-xs text-red-600 mt-1 font-medium">{fieldErrors.password}</p>
               )}
             </div>
-
-            {/* Confirm Password Field */}
-            {!isLogin && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  <span className="flex items-center gap-1">
-                    <Lock size={16} /> Confirm Password
-                  </span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    value={formData.passwordConfirm}
-                    onChange={(e) => handleInputChange('passwordConfirm', e.target.value)}
-                    className={`w-full px-4 py-3 pr-10 rounded-lg border-2 transition-all duration-200 focus:outline-none ${
-                      fieldErrors.passwordConfirm
-                        ? 'border-red-300 bg-red-50/30 focus:border-red-500'
-                        : 'border-slate-200 focus:border-blue-500 focus:bg-blue-50/30'
-                    }`}
-                    placeholder="••••••••"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
-                  >
-                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                {fieldErrors.passwordConfirm && (
-                  <p className="text-xs text-red-600 mt-1">{fieldErrors.passwordConfirm}</p>
-                )}
-              </div>
-            )}
 
             {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-6"
+              className="w-full font-bold py-3.5 rounded-xl transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover:scale-[1.02] hover:shadow-lg"
+              style={{ 
+                background: `linear-gradient(135deg, ${lavender.primary}, ${lavender.accent})`,
+                color: lavender.white,
+                fontFamily: 'DM Sans'
+              }}
             >
               {loading ? (
                 <>
                   <Loader size={18} className="animate-spin" />
-                  {isLogin ? 'Signing in...' : 'Creating account...'}
+                  Signing in...
                 </>
               ) : (
-                <>
-                  {isLogin ? 'Sign In' : 'Create Account'}
-                </>
+                'Sign In'
               )}
             </button>
           </form>
 
-          {/* Toggle between login and signup */}
+          {/* Signup Link */}
           <div className="mt-6 text-center">
-            <p className="text-slate-600 text-sm mb-3">
-              {isLogin ? "Don't have an account?" : 'Already have an account?'}
+            <p className="text-sm" style={{ color: lavender.textLight, fontFamily: 'DM Sans' }}>
+              Don't have an account?{' '}
+              <Link href="/signup" className="font-semibold transition-colors duration-200 hover:opacity-80"
+                    style={{ color: lavender.primary }}>
+                Create one here
+              </Link>
             </p>
-            <button
-              onClick={() => {
-                setIsLogin(!isLogin)
-                setError('')
-                setFieldErrors({})
-                setSuccess('')
-              }}
-              className="text-blue-600 hover:text-blue-700 font-semibold text-sm"
-            >
-              {isLogin ? 'Create one here' : 'Sign in here'}
-            </button>
           </div>
 
           {/* Footer */}
-          <p className="text-center text-xs text-slate-500 mt-6 pt-6 border-t border-slate-200">
-            Enterprise Restaurant POS with Subscription Management
-          </p>
+          <div className="mt-8 pt-6 text-center" style={{ borderTop: `1px solid ${lavender.primary}20` }}>
+            <div className="flex items-center justify-center gap-1 mb-2">
+              <Star size={12} style={{ color: '#D4A853', fill: '#D4A853' }} />
+              <Star size={12} style={{ color: '#D4A853', fill: '#D4A853' }} />
+              <Star size={12} style={{ color: '#D4A853', fill: '#D4A853' }} />
+              <Star size={12} style={{ color: '#D4A853', fill: '#D4A853' }} />
+              <Star size={12} style={{ color: '#D4A853', fill: '#D4A853' }} />
+            </div>
+            <p className="text-xs" style={{ color: lavender.textLight, fontFamily: 'DM Sans' }}>
+              Trusted by 500+ restaurants across India
+            </p>
+          </div>
+        </div>
+
+        {/* Back to Home Link */}
+        <div className="text-center mt-6">
+          <Link href="/" className="text-sm font-medium transition-all duration-200 hover:opacity-70"
+                style={{ color: lavender.textLight, fontFamily: 'DM Sans' }}>
+            ← Back to Home
+          </Link>
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+      `}</style>
     </div>
-    </DesktopOnlyWrapper>
   )
 }

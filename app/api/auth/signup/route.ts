@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
 import { getMongoClient } from '@/lib/mongodb'
 import { subscriptionService } from '@/lib/subscription-service'
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 
 export async function POST(req: NextRequest) {
   const { username, email, password, passwordConfirm, restaurantName, subscriptionType = 'MONTHLY' } = await req.json()
@@ -100,13 +103,27 @@ export async function POST(req: NextRequest) {
 
     await db.collection('menu').insertMany(defaultMenuItems)
 
-    return NextResponse.json({
+    // Generate JWT token
+    const token = jwt.sign({
+      userId: result.insertedId.toString(),
+      email,
+      username,
+      restaurantName,
+      restaurantId: result.insertedId.toString(),
+      isAdmin: false
+    }, JWT_SECRET, { expiresIn: '24h' })
+
+    const response = NextResponse.json({
       message: 'Account created successfully',
+      token,
       user: {
         id: result.insertedId.toString(),
         username,
         email,
-        restaurantName
+        restaurantName,
+        isAdmin: false,
+        isFirstLogin: true,
+        tablesCount: 12
       },
       subscription: {
         type: subscription.subscription_type,
@@ -114,6 +131,16 @@ export async function POST(req: NextRequest) {
         status: subscription.status
       }
     })
+
+    // Set token as cookie
+    response.cookies.set('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 // 24 hours
+    })
+
+    return response
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to create account'
