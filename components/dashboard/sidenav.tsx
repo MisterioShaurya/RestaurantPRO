@@ -88,8 +88,27 @@ export default function SideNav({ isOpen, onToggle }: SideNavProps) {
     return `text-gray-700 hover:bg-gray-100 transition-colors`
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Clear all auth tokens from localStorage
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    localStorage.removeItem('currentUser')
+    localStorage.removeItem('selectedPlan')
+    
+    // Clear auth cookies
+    document.cookie = 'token=; path=/; max-age=0; SameSite=Lax'
+    document.cookie = 'userRole=; path=/; max-age=0; SameSite=Lax'
+    
+    // Call logout API to clear httpOnly cookie on server
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch (err) {
+      console.error('Logout API error:', err)
+    }
+    
+    // Also clear persistentUserStorage's internal data
     persistentUserStorage.logout()
+    
     router.push('/login')
   }
 
