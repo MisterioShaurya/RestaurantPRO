@@ -8,7 +8,8 @@ import {
   Check, Mail, Phone, MapPin, Menu, X, Heart, ChevronDown, Package, Truck,
   Settings, DollarSign, ShoppingBag, Bell, Filter, SortAsc, RefreshCw, Printer,
   Lock, Zap, Globe, Award, TrendingUp, ShieldCheck, CreditCard, Headphones,
-  Monitor, Smartphone
+  Monitor, Smartphone, PlayCircle, HardDrive, Calendar, File, Cloud, Wifi,
+  Database, MessageSquare, FileText, RefreshCcw, Rocket
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -17,81 +18,71 @@ export default function Home() {
   const [isChecking, setIsChecking] = useState(true);
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [statsVisible, setStatsVisible] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [visibleSections, setVisibleSections] = useState<Set<string>>(new Set());
+  const [activeFeature, setActiveFeature] = useState(0);
   const [counters, setCounters] = useState({ restaurants: 0, orders: 0, uptime: 0, rating: 0 });
-  const [activeStep, setActiveStep] = useState(0);
-  const [currentTestimonial, setCurrentTestimonial] = useState(0);
-  const statsRef = useRef<HTMLDivElement>(null);
-  const routerInitialized = useRef(false);
+  const [statsAnimated, setStatsAnimated] = useState(false);
 
   useEffect(() => {
-    routerInitialized.current = true;
-    
     const checkAuth = async () => {
       await new Promise(resolve => setTimeout(resolve, 100));
-      
       const currentUser = persistentUserStorage.getCurrentUser();
       const systemLocked = persistentUserStorage.isLocked();
       
-      if (currentUser && !systemLocked && routerInitialized.current) {
+      if (currentUser && !systemLocked) {
         router.push('/dashboard');
       } else {
         setIsChecking(false);
       }
     };
-
     checkAuth();
   }, [router]);
 
+  // Scroll progress
   useEffect(() => {
     const handleScroll = () => {
-      setScrolled(window.scrollY > 50);
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = (scrollTop / docHeight) * 100;
+      setScrollProgress(progress);
+      setScrolled(scrollTop > 50);
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !statsVisible) {
-          setStatsVisible(true);
-          animateCounters();
-        }
-      },
-      { threshold: 0.3 }
-    );
-
-    if (statsRef.current) {
-      observer.observe(statsRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [statsVisible]);
-
+  // Intersection Observer for scroll animations
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            const index = parseInt(entry.target.getAttribute('data-step') || '0');
-            setActiveStep((prev) => Math.max(prev, index));
+            const sectionId = entry.target.getAttribute('data-section');
+            if (sectionId) {
+              setVisibleSections(prev => new Set([...prev, sectionId]));
+              if (sectionId === 'stats' && !statsAnimated) {
+                setStatsAnimated(true);
+                animateCounters();
+              }
+            }
           }
         });
       },
-      { threshold: 0.5 }
+      { threshold: 0.2 }
     );
 
-    const stepElements = document.querySelectorAll('[data-step]');
-    stepElements.forEach((el) => observer.observe(el));
+    const sections = document.querySelectorAll('[data-section]');
+    sections.forEach(section => observer.observe(section));
 
     return () => observer.disconnect();
-  }, []);
+  }, [statsAnimated]);
 
+  // Auto-rotate features
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentTestimonial((prev) => (prev + 1) % 3);
-    }, 5000);
+      setActiveFeature(prev => (prev + 1) % features.length);
+    }, 4000);
     return () => clearInterval(interval);
   }, []);
 
@@ -105,45 +96,84 @@ export default function Home() {
     const timer = setInterval(() => {
       step++;
       const progress = step / steps;
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
       setCounters({
-        restaurants: Math.round(targets.restaurants * progress),
-        orders: Math.round(targets.orders * progress),
-        uptime: parseFloat((targets.uptime * progress).toFixed(1)),
-        rating: parseFloat((targets.rating * progress).toFixed(1))
+        restaurants: Math.round(targets.restaurants * easeProgress),
+        orders: Math.round(targets.orders * easeProgress),
+        uptime: parseFloat((targets.uptime * easeProgress).toFixed(1)),
+        rating: parseFloat((targets.rating * easeProgress).toFixed(1))
       });
       if (step >= steps) clearInterval(timer);
     }, interval);
   };
 
-  if (isChecking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #F3F1FF 0%, #E8E3FF 50%, #D4CEFF 100%)' }}>
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{ borderColor: '#7C6FCD' }}></div>
-          <p style={{ color: '#1A1535', fontFamily: 'DM Sans, sans-serif' }}>Loading RestaurantPro...</p>
-        </div>
-      </div>
-    );
-  }
+  // Lavender color palette - simplified and elegant
+  const lavender = {
+    primary: '#9B7EC8',      // Main lavender
+    light: '#E8E0F0',        // Light lavender background
+    lighter: '#F5F0FA',      // Very light lavender
+    dark: '#7B5FA8',         // Darker lavender for accents
+    darkest: '#5B3F78',      // Deepest lavender
+    accent: '#C4A7E0',       // Soft accent lavender
+    text: '#2D1B4E',         // Dark purple text
+    textLight: '#6B5B7B',    // Light purple text
+    white: '#FFFFFF',
+    cardBg: 'rgba(255, 255, 255, 0.85)',
+  };
 
   const features = [
-    { icon: <Utensils className="h-8 w-8" />, title: "Smart Table Management", desc: "Visual floor plan, reservations, real-time status tracking", badge: "Popular" },
-    { icon: <DollarSign className="h-8 w-8" />, title: "Lightning-Fast Billing", desc: "Split bills, discounts, UPI/cash/card in seconds", badge: "Fast" },
-    { icon: <Package className="h-8 w-8" />, title: "Order & KOT Tracking", desc: "Kitchen display with order status from table to plate", badge: "Essential" },
-    { icon: <BarChart3 className="h-8 w-8" />, title: "Real-Time Analytics", desc: "Auto-generated reports with actionable insights", badge: "Smart" },
-    { icon: <Users className="h-8 w-8" />, title: "Staff Management", desc: "Permissions, shift tracking, performance monitoring", badge: "Secure" },
-    { icon: <Shield className="h-8 w-8" />, title: "Cloud Backup", desc: "Automatic backup, access from any device", badge: "Reliable" }
+    { 
+      icon: <Utensils className="h-8 w-8" />, 
+      title: "Smart Table Management", 
+      desc: "Visual floor plan with real-time status tracking, reservations, and waitlist management",
+    },
+    { 
+      icon: <Zap className="h-8 w-8" />, 
+      title: "Lightning-Fast Billing", 
+      desc: "Process bills in 3 seconds with split bills, discounts, and multiple payment options",
+    },
+    { 
+      icon: <Package className="h-8 w-8" />, 
+      title: "KOT & Order Tracking", 
+      desc: "Kitchen display system with real-time order status from table to plate",
+    },
+    { 
+      icon: <BarChart3 className="h-8 w-8" />, 
+      title: "Real-Time Analytics", 
+      desc: "Auto-generated reports with actionable insights to boost your revenue",
+    },
+    { 
+      icon: <Users className="h-8 w-8" />, 
+      title: "Staff Management", 
+      desc: "Role-based permissions, shift tracking, and performance monitoring",
+    },
+    { 
+      icon: <Cloud className="h-8 w-8" />, 
+      title: "Cloud Backup", 
+      desc: "Automatic cloud sync with access from any device, anywhere",
+    }
   ];
 
-  const steps = [
-    { num: "01", icon: <Globe className="h-6 w-6" />, name: "Visit Site", desc: "Go to restaurantpro.com" },
-    { num: "02", icon: <Zap className="h-6 w-6" />, name: "Get Started", desc: "Click Get Started Free" },
-    { num: "03", icon: <Users className="h-6 w-6" />, name: "Create Account", desc: "Fill in your details" },
-    { num: "04", icon: <Settings className="h-6 w-6" />, name: "Workspace Ready", desc: "Dashboard created" },
-    { num: "05", icon: <Utensils className="h-6 w-6" />, name: "Setup Tables", desc: "Initialize floor plan" },
-    { num: "06", icon: <Menu className="h-6 w-6" />, name: "Add Menu", desc: "Upload your dishes" },
-    { num: "07", icon: <ShoppingBag className="h-6 w-6" />, name: "Start Billing", desc: "Process first order" },
-    { num: "08", icon: <TrendingUp className="h-6 w-6" />, name: "Auto Reports", desc: "Analytics update live" }
+  const newFeatures = [
+    { icon: <Wifi className="h-6 w-6" />, title: "Offline Mode", desc: "Works without internet" },
+    { icon: <Printer className="h-6 w-6" />, title: "Print Integration", desc: "Thermal printer support" },
+    { icon: <Bell className="h-6 w-6" />, title: "Smart Notifications", desc: "Real-time alerts" },
+    { icon: <Database className="h-6 w-6" />, title: "Inventory Sync", desc: "Auto stock updates" },
+    { icon: <Calendar className="h-6 w-6" />, title: "Reservation System", desc: "Online bookings" },
+    { icon: <MessageSquare className="h-6 w-6" />, title: "Customer Feedback", desc: "In-app reviews" },
+    { icon: <FileText className="h-6 w-6" />, title: "GST Compliance", desc: "Auto tax calculation" },
+    { icon: <RefreshCcw className="h-6 w-6" />, title: "Multi-Outlet", desc: "Manage all branches" }
+  ];
+
+  const integrations = [
+    { name: "Google Pay", icon: "💳" },
+    { name: "PhonePe", icon: "📱" },
+    { name: "Paytm", icon: "💰" },
+    { name: "Razorpay", icon: "🔐" },
+    { name: "Swiggy", icon: "🛵" },
+    { name: "Zomato", icon: "🍕" },
+    { name: "WhatsApp", icon: "💬" },
+    { name: "SMS Gateway", icon: "📲" }
   ];
 
   const testimonials = [
@@ -200,53 +230,45 @@ export default function Home() {
     }
   ];
 
-  const comparisonFeatures = [
-    { feature: "Order Speed", us: "3 seconds", traditional: "2-5 mins", manual: "5-10 mins" },
-    { feature: "Billing Accuracy", us: "99.9%", traditional: "95%", manual: "85%" },
-    { feature: "Cloud Backup", us: "Auto", traditional: "Manual", manual: "None" },
-    { feature: "Real-time Reports", us: "Live", traditional: "Daily", manual: "Weekly" },
-    { feature: "Multi-device Sync", us: "Instant", traditional: "Delayed", manual: "No" },
-    { feature: "Setup Time", us: "5 mins", traditional: "2 hours", manual: "Days" },
-    { feature: "Monthly Cost", us: "₹999+", traditional: "₹5000+", manual: "₹0 (slow)" }
-  ];
-
-  const trustBadges = [
-    { icon: <ShieldCheck className="h-8 w-8" />, label: "ISO 27001 Certified" },
-    { icon: <Lock className="h-8 w-8" />, label: "256-bit SSL Encryption" },
-    { icon: <CreditCard className="h-8 w-8" />, label: "PCI DSS Compliant" },
-    { icon: <Award className="h-8 w-8" />, label: "99.9% Uptime SLA" }
-  ];
-
-  const clientLogos = [
-    "Spice Route", "Spice Garden", "Coastal Kitchen", "Punjab Dhaba", 
-    "South Corner", "Mumbai Tadka", "Delhi Darbar", "Chennai Express"
-  ];
+  if (isChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: lavender.lighter }}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{ borderColor: lavender.primary }}></div>
+          <p style={{ color: lavender.text, fontFamily: 'DM Sans, sans-serif' }}>Loading RestaurantPro...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #F3F1FF 0%, #E8E3FF 50%, #D4CEFF 100%)' }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ background: lavender.lighter }}>
       {/* Scroll Progress Bar */}
-      <div className="fixed top-0 left-0 right-0 h-1 z-[60]" style={{ background: 'linear-gradient(90deg, #7C6FCD, #A89BE8, #F5A623)' }}></div>
+      <div className="fixed top-0 left-0 right-0 h-1 z-[60]" style={{ 
+        background: `linear-gradient(90deg, ${lavender.primary} ${scrollProgress}%, transparent ${scrollProgress}%)`,
+        transition: 'background 0.1s ease-out'
+      }}></div>
 
       {/* Sticky Navbar */}
-      <header className={`fixed top-1 left-0 right-0 z-50 transition-all duration-500 ${scrolled ? 'backdrop-blur-xl shadow-lg py-2' : 'py-4'}`} 
-              style={{ background: scrolled ? 'rgba(243, 241, 255, 0.9)' : 'transparent' }}>
+      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled ? 'backdrop-blur-xl shadow-lg py-2' : 'py-4'}`} 
+              style={{ background: scrolled ? `${lavender.lighter}ee` : 'transparent' }}>
         <nav className="container mx-auto px-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <span className="text-3xl">🍽️</span>
-              <span className="text-2xl font-bold" style={{ fontFamily: 'Playfair Display, serif', color: '#1A1535' }}>RestaurantPro</span>
-              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-xs font-semibold" 
-                    style={{ background: 'rgba(124, 111, 205, 0.1)', color: '#7C6FCD' }}>PRO</span>
+              <span className="text-2xl font-bold" style={{ fontFamily: 'Playfair Display, serif', color: lavender.text }}>RestaurantPro</span>
+              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-xs font-semibold animate-pulse" 
+                    style={{ background: `${lavender.primary}20`, color: lavender.primary }}>PRO</span>
             </div>
             
             {/* Desktop Nav */}
             <div className="hidden md:flex items-center space-x-8">
-              {['Features', 'How It Works', 'Pricing', 'Testimonials', 'Contact'].map((item) => (
-                <a key={item} href={`#${item.toLowerCase().replace(/\s+/g, '-')}`} 
+              {['Features', 'Integrations', 'Pricing', 'Testimonials', 'Contact'].map((item) => (
+                <a key={item} href={`#${item.toLowerCase()}`} 
                    className="text-sm font-medium transition-all duration-300 hover:opacity-80 relative group"
-                   style={{ fontFamily: 'DM Sans, sans-serif', color: '#1A1535' }}>
+                   style={{ fontFamily: 'DM Sans, sans-serif', color: lavender.text }}>
                   {item}
-                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full" style={{ background: '#7C6FCD' }}></span>
+                  <span className="absolute -bottom-1 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full" style={{ background: lavender.primary }}></span>
                 </a>
               ))}
             </div>
@@ -254,12 +276,12 @@ export default function Home() {
             <div className="hidden md:flex items-center space-x-4">
               <Button variant="ghost" onClick={() => router.push('/login')} 
                       className="transition-all duration-300 hover:scale-105" 
-                      style={{ color: '#1A1535', fontFamily: 'DM Sans' }}>
+                      style={{ color: lavender.text, fontFamily: 'DM Sans' }}>
                 Login
               </Button>
               <Button onClick={() => router.push('/signup')} 
                       className="rounded-full px-6 transition-all duration-300 hover:scale-105 hover:shadow-lg" 
-                      style={{ background: '#7C6FCD', color: 'white', fontFamily: 'DM Sans' }}>
+                      style={{ background: lavender.primary, color: lavender.white, fontFamily: 'DM Sans' }}>
                 Get Started Free <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             </div>
@@ -267,30 +289,30 @@ export default function Home() {
             {/* Mobile Menu Toggle */}
             <button className="md:hidden transition-transform duration-300 hover:scale-110" 
                     onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-              {mobileMenuOpen ? <X className="h-6 w-6" style={{ color: '#1A1535' }} /> : <Menu className="h-6 w-6" style={{ color: '#1A1535' }} />}
+              {mobileMenuOpen ? <X className="h-6 w-6" style={{ color: lavender.text }} /> : <Menu className="h-6 w-6" style={{ color: lavender.text }} />}
             </button>
           </div>
 
           {/* Mobile Menu */}
           {mobileMenuOpen && (
-            <div className="md:hidden mt-4 pb-4 space-y-4 border-t pt-4" style={{ borderColor: 'rgba(124, 111, 205, 0.2)' }}>
-              {['Features', 'How It Works', 'Pricing', 'Testimonials', 'Contact'].map((item) => (
-                <a key={item} href={`#${item.toLowerCase().replace(/\s+/g, '-')}`} 
+            <div className="md:hidden mt-4 pb-4 space-y-4 border-t pt-4 animate-slideDown" style={{ borderColor: `${lavender.primary}30` }}>
+              {['Features', 'Integrations', 'Pricing', 'Testimonials', 'Contact'].map((item) => (
+                <a key={item} href={`#${item.toLowerCase()}`} 
                    className="block text-sm font-medium py-2 transition-colors duration-300"
-                   style={{ color: '#1A1535', fontFamily: 'DM Sans' }}
+                   style={{ color: lavender.text, fontFamily: 'DM Sans' }}
                    onClick={() => setMobileMenuOpen(false)}>
                   {item}
                 </a>
               ))}
-              <div className="flex flex-col space-y-2 pt-4 border-t" style={{ borderColor: 'rgba(124, 111, 205, 0.2)' }}>
+              <div className="flex flex-col space-y-2 pt-4 border-t" style={{ borderColor: `${lavender.primary}30` }}>
                 <Button variant="outline" onClick={() => router.push('/login')} 
                         className="transition-all duration-300" 
-                        style={{ borderColor: '#7C6FCD', color: '#7C6FCD' }}>
+                        style={{ borderColor: lavender.primary, color: lavender.primary }}>
                   Login
                 </Button>
                 <Button onClick={() => router.push('/signup')} 
                         className="transition-all duration-300" 
-                        style={{ background: '#7C6FCD', color: 'white' }}>
+                        style={{ background: lavender.primary, color: lavender.white }}>
                   Get Started Free
                 </Button>
               </div>
@@ -301,80 +323,83 @@ export default function Home() {
 
       {/* Hero Section */}
       <section className="pt-32 pb-20 px-6 relative overflow-hidden min-h-screen flex items-center">
-        {/* Floating orbs */}
-        <div className="absolute top-20 left-10 w-72 h-72 rounded-full opacity-30 blur-3xl animate-pulse" 
-             style={{ background: 'radial-gradient(circle, #A89BE8, transparent)' }}></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 rounded-full opacity-20 blur-3xl animate-pulse" 
-             style={{ background: 'radial-gradient(circle, #7C6FCD, transparent)', animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-1/3 w-64 h-64 rounded-full opacity-20 blur-3xl animate-pulse" 
-             style={{ background: 'radial-gradient(circle, #F5A623, transparent)', animationDelay: '2s' }}></div>
+        {/* Subtle Lavender Background Elements */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-20 left-10 w-96 h-96 rounded-full opacity-20 blur-3xl" 
+               style={{ background: `radial-gradient(circle, ${lavender.accent}, transparent)` }}></div>
+          <div className="absolute bottom-20 right-10 w-[500px] h-[500px] rounded-full opacity-15 blur-3xl" 
+               style={{ background: `radial-gradient(circle, ${lavender.primary}, transparent)` }}></div>
+          <div className="absolute top-1/2 left-1/3 w-80 h-80 rounded-full opacity-10 blur-3xl" 
+               style={{ background: `radial-gradient(circle, ${lavender.light}, transparent)` }}></div>
+        </div>
         
         <div className="container mx-auto relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left Content */}
-            <div className="text-center lg:text-left">
+            <div className="text-center lg:text-left animate-fadeInUp">
               <div className="inline-flex items-center px-4 py-2 rounded-full mb-6" 
-                   style={{ background: 'rgba(124, 111, 205, 0.1)', border: '1px solid rgba(124, 111, 205, 0.2)' }}>
-                <Star className="h-4 w-4 mr-2" style={{ color: '#F5A623' }} />
-                <span className="text-sm font-medium" style={{ color: '#7C6FCD', fontFamily: 'DM Sans' }}>✦ Trusted by 500+ Restaurants</span>
+                   style={{ background: `${lavender.primary}15`, border: `1px solid ${lavender.primary}30` }}>
+                <Star className="h-4 w-4 mr-2" style={{ color: lavender.dark }} />
+                <span className="text-sm font-medium" style={{ color: lavender.primary, fontFamily: 'DM Sans' }}>✦ Trusted by 500+ Restaurants</span>
               </div>
               
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight" 
-                  style={{ fontFamily: 'Playfair Display, serif', color: '#1A1535' }}>
+              <h1 className="text-4xl md:text-5xl lg:text-7xl font-bold mb-6 leading-tight" 
+                  style={{ fontFamily: 'Playfair Display, serif', color: lavender.text }}>
                 Run Your Restaurant Like a{' '}
                 <span className="relative inline-block">
-                  <span style={{ background: 'linear-gradient(135deg, #7C6FCD, #A89BE8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>5-Star</span>
+                  <span style={{ color: lavender.primary }}>5-Star</span>
                   <svg className="absolute -bottom-2 left-0 w-full" height="8" viewBox="0 0 200 8">
-                    <path d="M0 6 Q50 0 100 6 T200 6" stroke="#F5A623" strokeWidth="3" fill="none"/>
+                    <path d="M0 6 Q50 0 100 6 T200 6" stroke={lavender.accent} strokeWidth="3" fill="none"/>
                   </svg>
                 </span>
                 {' '}Operation
               </h1>
               
               <p className="text-lg md:text-xl mb-8 max-w-xl mx-auto lg:mx-0" 
-                 style={{ color: '#4A4A68', fontFamily: 'DM Sans', lineHeight: '1.8' }}>
+                 style={{ color: lavender.textLight, fontFamily: 'DM Sans', lineHeight: '1.8' }}>
                 RestaurantPro handles billing, tables, orders, and analytics — focus on food, not paperwork.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-8">
                 <Button size="lg" onClick={() => router.push('/signup')}
-                        className="rounded-full px-8 py-6 text-lg font-semibold shadow-lg transition-all duration-300 hover:shadow-2xl hover:scale-105"
-                        style={{ background: '#F5A623', color: '#1A1535', fontFamily: 'DM Sans' }}>
+                        className="rounded-full px-8 py-6 text-lg font-semibold shadow-lg transition-all duration-300 hover:shadow-2xl hover:scale-105 group"
+                        style={{ background: lavender.primary, color: lavender.white, fontFamily: 'DM Sans' }}>
                   🚀 Start Free Trial
+                  <ChevronRight className="ml-2 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
                 </Button>
                 <Button size="lg" variant="outline"
                         className="rounded-full px-8 py-6 text-lg border-2 transition-all duration-300 hover:scale-105"
-                        style={{ borderColor: '#7C6FCD', color: '#7C6FCD', fontFamily: 'DM Sans' }}>
-                  <RefreshCw className="mr-2 h-5 w-5" /> Watch Demo
+                        style={{ borderColor: lavender.primary, color: lavender.primary, fontFamily: 'DM Sans' }}>
+                  <PlayCircle className="mr-2 h-5 w-5" /> Watch Demo
                 </Button>
               </div>
 
               <div className="flex flex-wrap gap-6 justify-center lg:justify-start text-sm" 
-                   style={{ color: '#4A4A68', fontFamily: 'DM Sans' }}>
-                <span className="flex items-center"><Check className="h-4 w-4 mr-1" style={{ color: '#10B981' }} /> No credit card</span>
-                <span className="flex items-center"><Check className="h-4 w-4 mr-1" style={{ color: '#10B981' }} /> 5 min setup</span>
-                <span className="flex items-center"><Check className="h-4 w-4 mr-1" style={{ color: '#10B981' }} /> 14-day trial</span>
+                   style={{ color: lavender.textLight, fontFamily: 'DM Sans' }}>
+                <span className="flex items-center"><Check className="h-4 w-4 mr-1" style={{ color: lavender.primary }} /> No credit card</span>
+                <span className="flex items-center"><Check className="h-4 w-4 mr-1" style={{ color: lavender.primary }} /> 5 min setup</span>
+                <span className="flex items-center"><Check className="h-4 w-4 mr-1" style={{ color: lavender.primary }} /> 14-day trial</span>
               </div>
 
               <div className="mt-8 flex items-center justify-center lg:justify-start gap-4">
                 <div className="flex -space-x-3">
                   {['PS', 'RM', 'AP', 'VK', 'SD'].map((initials, i) => (
-                    <div key={i} className="w-10 h-10 rounded-full border-2 border-white flex items-center justify-center text-xs font-bold shadow-md transition-transform duration-300 hover:scale-110 hover:z-10"
-                         style={{ background: ['#7C6FCD', '#F5A623', '#10B981', '#EF4444', '#3B82F6'][i], color: 'white' }}>
+                    <div key={i} className="w-10 h-10 rounded-full border-2 border-white flex items-center justify-center text-xs font-bold shadow-md transition-all duration-300 hover:scale-110 hover:z-10"
+                         style={{ background: [lavender.primary, lavender.dark, lavender.accent, lavender.darkest, lavender.light][i], color: lavender.white }}>
                       {initials}
                     </div>
                   ))}
                 </div>
-                <span className="text-sm" style={{ color: '#4A4A68' }}>Join 500+ owners</span>
+                <span className="text-sm" style={{ color: lavender.textLight }}>Join 500+ owners</span>
               </div>
             </div>
 
             {/* Right - Dashboard Mockup */}
-            <div className="relative">
-              <div className="rounded-2xl p-6 shadow-2xl relative overflow-hidden animate-bounce" 
-                   style={{ background: '#1A1535', border: '1px solid rgba(124, 111, 205, 0.3)', animationDuration: '6s' }}>
+            <div className="relative animate-fadeInRight">
+              <div className="rounded-2xl p-6 shadow-2xl relative overflow-hidden" 
+                   style={{ background: lavender.darkest, border: `1px solid ${lavender.primary}30` }}>
                 <div className="absolute inset-0 opacity-10" 
-                     style={{ background: 'linear-gradient(135deg, rgba(124, 111, 205, 0.3), transparent)' }}></div>
+                     style={{ background: `linear-gradient(135deg, ${lavender.primary}, transparent)` }}></div>
                 
                 <div className="relative z-10">
                   <div className="flex items-center justify-between mb-6">
@@ -390,12 +415,15 @@ export default function Home() {
 
                   <div className="grid grid-cols-3 gap-4 mb-6">
                     {[
-                      { label: 'Orders', value: '247', color: '#7C6FCD', icon: '📋' },
-                      { label: 'Revenue', value: '₹45K', color: '#F5A623', icon: '💰' },
-                      { label: 'Tables', value: '18', color: '#10B981', icon: '🍽️' }
+                      { label: 'Orders', value: '247', color: lavender.accent, icon: '📋' },
+                      { label: 'Revenue', value: '₹45K', color: '#C4A7E0', icon: '💰' },
+                      { label: 'Tables', value: '18', color: '#B8A0D0', icon: '🍽️' }
                     ].map((stat, i) => (
                       <div key={i} className="rounded-xl p-4 transition-all duration-300 hover:scale-105" 
-                           style={{ background: 'rgba(124, 111, 205, 0.1)', border: '1px solid rgba(124, 111, 205, 0.2)' }}>
+                           style={{ 
+                             background: `${lavender.primary}15`, 
+                             border: `1px solid ${lavender.primary}20`
+                           }}>
                         <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
                           <span>{stat.icon}</span> {stat.label}
                         </p>
@@ -411,10 +439,10 @@ export default function Home() {
                       { table: 'Table #2', item: 'Pasta Alfredo', amount: '₹890', status: 'Ready' },
                       { table: 'Table #8', item: 'Pizza', amount: '₹1,100', status: 'Served' }
                     ].map((order, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 rounded-lg transition-all duration-300 hover:translate-x-1" 
+                      <div key={i} className="flex items-center justify-between p-3 rounded-lg transition-all duration-300 hover:translate-x-2" 
                            style={{ background: 'rgba(255, 255, 255, 0.05)' }}>
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: '#7C6FCD' }}>
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: lavender.primary }}>
                             <Utensils className="h-4 w-4 text-white" />
                           </div>
                           <div>
@@ -437,24 +465,24 @@ export default function Home() {
               </div>
 
               {/* Floating badges */}
-              <div className="absolute -bottom-4 -left-4 rounded-xl p-3 shadow-lg backdrop-blur-sm animate-bounce" 
-                   style={{ background: 'rgba(255, 255, 255, 0.9)', border: '1px solid rgba(124, 111, 205, 0.2)', animationDuration: '3s' }}>
+              <div className="absolute -bottom-4 -left-4 rounded-xl p-3 shadow-lg backdrop-blur-sm" 
+                   style={{ background: `${lavender.white}ee`, border: `1px solid ${lavender.primary}20` }}>
                 <div className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" style={{ color: '#F5A623' }} />
-                  <span className="text-sm font-medium" style={{ color: '#1A1535', fontFamily: 'DM Sans' }}>3 sec billing</span>
+                  <DollarSign className="h-5 w-5" style={{ color: lavender.dark }} />
+                  <span className="text-sm font-medium" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>3 sec billing</span>
                 </div>
               </div>
 
-              <div className="absolute -top-4 -right-4 rounded-xl p-3 shadow-lg backdrop-blur-sm animate-bounce" 
-                   style={{ background: 'rgba(255, 255, 255, 0.9)', border: '1px solid rgba(124, 111, 205, 0.2)', animationDuration: '3s', animationDelay: '1s' }}>
+              <div className="absolute -top-4 -right-4 rounded-xl p-3 shadow-lg backdrop-blur-sm" 
+                   style={{ background: `${lavender.white}ee`, border: `1px solid ${lavender.primary}20` }}>
                 <div className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" style={{ color: '#7C6FCD' }} />
-                  <span className="text-sm font-medium" style={{ color: '#1A1535', fontFamily: 'DM Sans' }}>Live reports</span>
+                  <BarChart3 className="h-5 w-5" style={{ color: lavender.primary }} />
+                  <span className="text-sm font-medium" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>Live reports</span>
                 </div>
               </div>
 
-              <div className="absolute bottom-1/3 -right-6 rounded-full px-3 py-2 shadow-lg backdrop-blur-sm" 
-                   style={{ background: 'rgba(16, 185, 129, 0.9)' }}>
+              <div className="absolute bottom-1/3 -right-6 rounded-full px-3 py-2 shadow-lg" 
+                   style={{ background: lavender.primary }}>
                 <div className="flex items-center gap-1">
                   <Shield className="h-3 w-3 text-white" />
                   <span className="text-xs font-medium text-white" style={{ fontFamily: 'DM Sans' }}>256-bit SSL</span>
@@ -464,51 +492,49 @@ export default function Home() {
           </div>
 
           <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
-            <ChevronDown className="h-8 w-8" style={{ color: '#7C6FCD' }} />
+            <ChevronDown className="h-8 w-8" style={{ color: lavender.primary }} />
           </div>
         </div>
       </section>
 
-      {/* Trust Badges Section */}
-      <section className="py-12 px-6" style={{ background: 'rgba(255, 255, 255, 0.5)' }}>
+      {/* Trust Badges */}
+      <section data-section="trust" className="py-12 px-6 transition-all duration-1000" 
+               style={{ 
+                 background: `${lavender.white}80`,
+                 opacity: visibleSections.has('trust') ? 1 : 0,
+                 transform: visibleSections.has('trust') ? 'translateY(0)' : 'translateY(30px)'
+               }}>
         <div className="container mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {trustBadges.map((badge, i) => (
-              <div key={i} className="flex items-center justify-center gap-3 p-4 rounded-xl transition-all duration-300 hover:scale-105"
-                   style={{ background: 'rgba(255, 255, 255, 0.7)', backdropFilter: 'blur(10px)' }}>
-                <div style={{ color: '#7C6FCD' }}>{badge.icon}</div>
-                <span className="text-sm font-medium" style={{ color: '#1A1535', fontFamily: 'DM Sans' }}>{badge.label}</span>
+            {[
+              { icon: <ShieldCheck className="h-8 w-8" />, label: "ISO 27001 Certified" },
+              { icon: <Lock className="h-8 w-8" />, label: "256-bit SSL Encryption" },
+              { icon: <CreditCard className="h-8 w-8" />, label: "PCI DSS Compliant" },
+              { icon: <Award className="h-8 w-8" />, label: "99.9% Uptime SLA" }
+            ].map((badge, i) => (
+              <div key={i} className="flex items-center justify-center gap-3 p-4 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                   style={{ 
+                     background: lavender.cardBg, 
+                     backdropFilter: 'blur(10px)',
+                   }}>
+                <div style={{ color: lavender.primary }}>{badge.icon}</div>
+                <span className="text-sm font-medium" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>{badge.label}</span>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Client Logos Section */}
-      <section className="py-16 px-6">
-        <div className="container mx-auto">
-          <p className="text-center text-sm mb-8" style={{ color: '#4A4A68', fontFamily: 'DM Sans' }}>Trusted by leading restaurants</p>
-          <div className="flex flex-wrap justify-center items-center gap-8 md:gap-12">
-            {clientLogos.map((logo, i) => (
-              <div key={i} className="px-6 py-3 rounded-lg transition-all duration-300 hover:scale-105 opacity-60 hover:opacity-100"
-                   style={{ background: 'rgba(255, 255, 255, 0.5)', fontFamily: 'Playfair Display', color: '#1A1535', fontWeight: 600 }}>
-                {logo}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Stats Bar */}
-      <section ref={statsRef} className="py-16 px-6 relative overflow-hidden" style={{ background: '#1A1535' }}>
+      {/* Stats Section */}
+      <section data-section="stats" className="py-20 px-6 relative overflow-hidden" style={{ background: lavender.darkest }}>
         <div className="absolute inset-0 opacity-20" 
-             style={{ background: 'linear-gradient(135deg, #7C6FCD, #A89BE8, #F5A623)' }}></div>
+             style={{ background: `linear-gradient(135deg, ${lavender.primary}, ${lavender.accent})` }}></div>
         
         <div className="container mx-auto relative z-10">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
               { value: counters.restaurants, suffix: '+', label: 'Restaurants', icon: '🍽️' },
-              { value: Math.floor(counters.orders / 1000000), suffix: 'M+', label: 'Orders', icon: '📋' },
+              { value: Math.floor(counters.orders / 1000000), suffix: 'M+', label: 'Orders Processed', icon: '📋' },
               { value: counters.uptime, suffix: '%', label: 'Uptime', icon: '⚡' },
               { value: counters.rating, suffix: '★', label: 'Rating', icon: '⭐' }
             ].map((stat, i) => (
@@ -524,126 +550,107 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Features Grid */}
-      <section id="features" className="py-20 px-6 relative">
-        <div className="absolute inset-0 opacity-30" 
-             style={{ background: 'radial-gradient(ellipse at top, #E8E3FF, transparent 50%)' }}></div>
+      {/* Features Section */}
+      <section id="features" data-section="features" className="py-20 px-6 relative">
+        <div className="absolute inset-0 opacity-20" 
+             style={{ background: `radial-gradient(ellipse at top, ${lavender.light}, transparent 50%)` }}></div>
         
         <div className="container mx-auto relative z-10">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'Playfair Display', color: lavender.text }}>
               Everything Your Restaurant Needs
             </h2>
-            <p className="text-lg max-w-2xl mx-auto" style={{ color: '#4A4A68', fontFamily: 'DM Sans' }}>
+            <p className="text-lg max-w-2xl mx-auto" style={{ color: lavender.textLight, fontFamily: 'DM Sans' }}>
               Powerful features to streamline every aspect of your operations
             </p>
           </div>
 
+          {/* Feature Cards */}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, i) => (
               <div key={i} 
-                   className="group rounded-2xl p-8 transition-all duration-500 hover:-translate-y-2 cursor-pointer"
+                   className={`group rounded-2xl p-8 transition-all duration-500 cursor-pointer ${
+                     visibleSections.has('features') ? 'animate-fadeInUp' : 'opacity-0'
+                   }`}
                    style={{ 
-                     background: 'rgba(255, 255, 255, 0.7)', 
+                     background: activeFeature === i ? lavender.white : lavender.cardBg, 
                      backdropFilter: 'blur(20px)',
-                     border: '1px solid rgba(124, 111, 205, 0.1)',
-                     boxShadow: '0 4px 20px rgba(124, 111, 205, 0.1)'
+                     border: activeFeature === i ? `2px solid ${lavender.primary}` : `1px solid ${lavender.primary}20`,
+                     boxShadow: activeFeature === i ? `0 20px 40px ${lavender.primary}20` : '0 4px 20px rgba(155, 126, 200, 0.1)',
+                     animationDelay: `${i * 0.1}s`,
+                     transform: activeFeature === i ? 'translateY(-8px)' : 'translateY(0)'
                    }}
-                   onMouseEnter={(e) => {
-                     e.currentTarget.style.boxShadow = '0 20px 40px rgba(124, 111, 205, 0.2)';
-                     e.currentTarget.style.borderColor = 'rgba(124, 111, 205, 0.3)';
-                   }}
-                   onMouseLeave={(e) => {
-                     e.currentTarget.style.boxShadow = '0 4px 20px rgba(124, 111, 205, 0.1)';
-                     e.currentTarget.style.borderColor = 'rgba(124, 111, 205, 0.1)';
-                   }}>
+                   onMouseEnter={() => setActiveFeature(i)}>
                 <div className="flex items-start justify-between mb-4">
                   <div className="w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-300 group-hover:scale-110"
-                       style={{ background: 'linear-gradient(135deg, rgba(124, 111, 205, 0.1), rgba(168, 155, 232, 0.1))' }}>
-                    <div style={{ color: '#7C6FCD' }}>{feature.icon}</div>
+                       style={{ background: `${lavender.primary}15` }}>
+                    <div style={{ color: lavender.primary }}>{feature.icon}</div>
                   </div>
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold"
-                        style={{ background: 'rgba(245, 166, 35, 0.1)', color: '#F5A623' }}>
-                    {feature.badge}
-                  </span>
                 </div>
-                <h3 className="text-xl font-bold mb-3" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>{feature.title}</h3>
-                <p style={{ color: '#4A4A68', fontFamily: 'DM Sans', lineHeight: '1.6' }}>{feature.desc}</p>
+                <h3 className="text-xl font-bold mb-3" style={{ fontFamily: 'Playfair Display', color: lavender.text }}>{feature.title}</h3>
+                <p style={{ color: lavender.textLight, fontFamily: 'DM Sans', lineHeight: '1.6' }}>{feature.desc}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
 
-      {/* How It Works */}
-      <section id="how-it-works" className="py-20 px-6 relative overflow-hidden" 
-               style={{ background: 'linear-gradient(180deg, #F3F1FF 0%, #E8E3FF 100%)' }}>
-        <div className="container mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>
-              Up and Running in Minutes
-            </h2>
-            <p className="text-lg max-w-2xl mx-auto" style={{ color: '#4A4A68', fontFamily: 'DM Sans' }}>
-              From signup to first order in 8 simple steps
-            </p>
-          </div>
-
-          {/* Desktop Timeline */}
-          <div className="hidden lg:block relative">
-            <div className="absolute top-16 left-0 right-0 h-1 rounded-full" style={{ background: 'rgba(124, 111, 205, 0.2)' }}></div>
-            <div className="absolute top-16 left-0 h-1 rounded-full transition-all duration-1000" 
-                 style={{ background: 'linear-gradient(90deg, #7C6FCD, #A89BE8)', width: `${(activeStep / 7) * 100}%` }}></div>
-
-            <div className="grid grid-cols-4 gap-8">
-              {steps.map((step, i) => (
-                <div key={i} data-step={i} className="text-center relative">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 transition-all duration-500 ${
-                    i <= activeStep ? 'scale-110 shadow-lg' : ''
-                  }`}
-                       style={{ 
-                         background: i <= activeStep ? '#7C6FCD' : 'rgba(124, 111, 205, 0.1)',
-                         border: i <= activeStep ? 'none' : '2px solid rgba(124, 111, 205, 0.3)'
-                       }}>
-                    <span style={{ color: i <= activeStep ? 'white' : '#7C6FCD' }}>{step.icon}</span>
+          {/* Additional Features Grid */}
+          <div className="mt-16">
+            <h3 className="text-2xl font-bold text-center mb-8" style={{ fontFamily: 'Playfair Display', color: lavender.text }}>
+              Plus Many More Features
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {newFeatures.map((feature, i) => (
+                <div key={i} className="flex items-center gap-3 p-4 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                     style={{ background: lavender.cardBg, backdropFilter: 'blur(10px)' }}>
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: `${lavender.primary}15` }}>
+                    <div style={{ color: lavender.primary }}>{feature.icon}</div>
                   </div>
-                  <div className="text-xs font-bold mb-1" style={{ color: '#7C6FCD', fontFamily: 'DM Sans' }}>{step.num}</div>
-                  <h4 className="font-bold mb-1" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>{step.name}</h4>
-                  <p className="text-sm" style={{ color: '#4A4A68', fontFamily: 'DM Sans' }}>{step.desc}</p>
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>{feature.title}</p>
+                    <p className="text-xs" style={{ color: lavender.textLight }}>{feature.desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
+        </div>
+      </section>
 
-          {/* Mobile Steps */}
-          <div className="lg:hidden space-y-4">
-            {steps.map((step, i) => (
-              <div key={i} className="flex items-start gap-4 p-4 rounded-xl"
-                   style={{ background: 'rgba(255, 255, 255, 0.7)', backdropFilter: 'blur(10px)' }}>
-                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                     style={{ background: '#7C6FCD' }}>
-                  <span className="text-white">{step.icon}</span>
-                </div>
-                <div>
-                  <div className="text-xs font-bold mb-1" style={{ color: '#7C6FCD' }}>{step.num}</div>
-                  <h4 className="font-bold" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>{step.name}</h4>
-                  <p className="text-sm" style={{ color: '#4A4A68' }}>{step.desc}</p>
-                </div>
-              </div>
-            ))}
+      {/* Integrations Section */}
+      <section id="integrations" data-section="integrations" className="py-20 px-6 relative overflow-hidden"
+               style={{ background: lavender.light }}>
+        <div className="container mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'Playfair Display', color: lavender.text }}>
+              Seamless Integrations
+            </h2>
+            <p className="text-lg max-w-2xl mx-auto" style={{ color: lavender.textLight, fontFamily: 'DM Sans' }}>
+              Connect with your favorite payment gateways and delivery platforms
+            </p>
           </div>
 
-          <div className="text-center mt-12">
-            <Button size="lg" onClick={() => router.push('/signup')}
-                    className="rounded-full px-8 py-6 text-lg font-semibold transition-all duration-300 hover:scale-105 hover:shadow-xl"
-                    style={{ background: '#7C6FCD', color: 'white', fontFamily: 'DM Sans' }}>
-              Start Your Journey <ChevronRight className="ml-2 h-5 w-5" />
-            </Button>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {integrations.map((integration, i) => (
+              <div key={i} 
+                   className={`rounded-2xl p-6 text-center transition-all duration-500 hover:-translate-y-2 hover:shadow-xl ${
+                     visibleSections.has('integrations') ? 'animate-fadeInUp' : 'opacity-0'
+                   }`}
+                   style={{ 
+                     background: lavender.cardBg, 
+                     backdropFilter: 'blur(20px)',
+                     border: `1px solid ${lavender.primary}15`,
+                     animationDelay: `${i * 0.1}s`
+                   }}>
+                <div className="text-4xl mb-3">{integration.icon}</div>
+                <p className="font-semibold" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>{integration.name}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Comparison Table */}
-      <section className="py-20 px-6" style={{ background: '#1A1535' }}>
+      {/* Comparison Section */}
+      <section data-section="comparison" className="py-20 px-6" style={{ background: lavender.darkest }}>
         <div className="container mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white" style={{ fontFamily: 'Playfair Display' }}>
@@ -659,7 +666,7 @@ export default function Home() {
               <thead>
                 <tr className="border-b border-gray-700">
                   <th className="text-left py-4 px-6 text-gray-400 font-medium" style={{ fontFamily: 'DM Sans' }}>Feature</th>
-                  <th className="text-center py-4 px-6 rounded-t-xl" style={{ background: 'linear-gradient(135deg, #7C6FCD, #A89BE8)' }}>
+                  <th className="text-center py-4 px-6 rounded-t-xl" style={{ background: `linear-gradient(135deg, ${lavender.primary}, ${lavender.accent})` }}>
                     <span className="text-white font-bold" style={{ fontFamily: 'Playfair Display' }}>RestaurantPro</span>
                     <span className="block text-xs text-purple-200 mt-1">Recommended</span>
                   </th>
@@ -668,10 +675,18 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody>
-                {comparisonFeatures.map((row, i) => (
+                {[
+                  { feature: "Order Speed", us: "3 seconds", traditional: "2-5 mins", manual: "5-10 mins" },
+                  { feature: "Billing Accuracy", us: "99.9%", traditional: "95%", manual: "85%" },
+                  { feature: "Cloud Backup", us: "Auto", traditional: "Manual", manual: "None" },
+                  { feature: "Real-time Reports", us: "Live", traditional: "Daily", manual: "Weekly" },
+                  { feature: "Multi-device Sync", us: "Instant", traditional: "Delayed", manual: "No" },
+                  { feature: "Setup Time", us: "5 mins", traditional: "2 hours", manual: "Days" },
+                  { feature: "Monthly Cost", us: "₹999+", traditional: "₹5000+", manual: "₹0 (slow)" }
+                ].map((row, i) => (
                   <tr key={i} className="border-b border-gray-800">
                     <td className="py-4 px-6 text-white font-medium" style={{ fontFamily: 'DM Sans' }}>{row.feature}</td>
-                    <td className="py-4 px-6 text-center" style={{ background: 'rgba(124, 111, 205, 0.1)' }}>
+                    <td className="py-4 px-6 text-center" style={{ background: `${lavender.primary}15` }}>
                       <span className="text-green-400 font-semibold flex items-center justify-center gap-2">
                         <Check className="h-4 w-4" /> {row.us}
                       </span>
@@ -680,18 +695,6 @@ export default function Home() {
                     <td className="py-4 px-6 text-center text-gray-500">{row.manual}</td>
                   </tr>
                 ))}
-                <tr>
-                  <td className="py-6 px-6 text-white font-bold" style={{ fontFamily: 'Playfair Display' }}>Score</td>
-                  <td className="py-6 px-6 text-center" style={{ background: 'rgba(124, 111, 205, 0.2)' }}>
-                    <span className="text-3xl font-bold text-white" style={{ fontFamily: 'Playfair Display' }}>10/10</span>
-                  </td>
-                  <td className="py-6 px-6 text-center">
-                    <span className="text-2xl font-bold text-gray-400" style={{ fontFamily: 'Playfair Display' }}>5/10</span>
-                  </td>
-                  <td className="py-6 px-6 text-center">
-                    <span className="text-2xl font-bold text-gray-500" style={{ fontFamily: 'Playfair Display' }}>2/10</span>
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>
@@ -699,19 +702,19 @@ export default function Home() {
       </section>
 
       {/* Testimonials */}
-      <section id="testimonials" className="py-20 px-6 relative overflow-hidden"
-               style={{ background: 'linear-gradient(135deg, #F3F1FF 0%, #E8E3FF 100%)' }}>
-        <div className="absolute top-10 right-10 w-64 h-64 rounded-full opacity-20 blur-3xl" 
-             style={{ background: '#A89BE8' }}></div>
-        <div className="absolute bottom-10 left-10 w-80 h-80 rounded-full opacity-20 blur-3xl" 
-             style={{ background: '#7C6FCD' }}></div>
+      <section id="testimonials" data-section="testimonials" className="py-20 px-6 relative overflow-hidden"
+               style={{ background: lavender.lighter }}>
+        <div className="absolute top-10 right-10 w-64 h-64 rounded-full opacity-15 blur-3xl" 
+             style={{ background: lavender.accent }}></div>
+        <div className="absolute bottom-10 left-10 w-80 h-80 rounded-full opacity-15 blur-3xl" 
+             style={{ background: lavender.primary }}></div>
 
         <div className="container mx-auto relative z-10">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'Playfair Display', color: lavender.text }}>
               Loved by 500+ Owners
             </h2>
-            <p className="text-lg max-w-2xl mx-auto" style={{ color: '#4A4A68', fontFamily: 'DM Sans' }}>
+            <p className="text-lg max-w-2xl mx-auto" style={{ color: lavender.textLight, fontFamily: 'DM Sans' }}>
               Real stories from restaurant owners across India
             </p>
           </div>
@@ -720,70 +723,53 @@ export default function Home() {
             {testimonials.map((testimonial, i) => (
               <div key={i} 
                    className={`rounded-2xl p-8 transition-all duration-500 hover:-translate-y-2 ${
-                     currentTestimonial === i ? 'ring-2 ring-offset-4' : ''
+                     visibleSections.has('testimonials') ? 'animate-fadeInUp' : 'opacity-0'
                    }`}
                    style={{ 
-                     background: 'rgba(255, 255, 255, 0.8)', 
+                     background: lavender.cardBg, 
                      backdropFilter: 'blur(20px)',
-                     boxShadow: '0 10px 40px rgba(124, 111, 205, 0.1)',
-                     border: '1px solid rgba(124, 111, 205, 0.1)',
-                     ringColor: currentTestimonial === i ? '#7C6FCD' : 'transparent'
+                     boxShadow: `0 10px 40px ${lavender.primary}15`,
+                     border: `1px solid ${lavender.primary}15`,
+                     animationDelay: `${i * 0.15}s`
                    }}>
                 <div className="flex mb-4">
                   {[...Array(testimonial.rating)].map((_, j) => (
-                    <Star key={j} className="h-5 w-5 fill-current" style={{ color: '#F5A623' }} />
+                    <Star key={j} className="h-5 w-5 fill-current" style={{ color: '#D4A853' }} />
                   ))}
                 </div>
-                <p className="text-lg mb-6 italic" style={{ color: '#4A4A68', fontFamily: 'DM Sans', lineHeight: '1.7' }}>
+                <p className="text-lg mb-6 italic" style={{ color: lavender.textLight, fontFamily: 'DM Sans', lineHeight: '1.7' }}>
                   &ldquo;{testimonial.quote}&rdquo;
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white"
-                         style={{ background: 'linear-gradient(135deg, #7C6FCD, #A89BE8)' }}>
+                         style={{ background: `linear-gradient(135deg, ${lavender.primary}, ${lavender.accent})` }}>
                       {testimonial.avatar}
                     </div>
                     <div>
-                      <p className="font-bold" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>{testimonial.name}</p>
-                      <p className="text-sm" style={{ color: '#4A4A68', fontFamily: 'DM Sans' }}>{testimonial.restaurant}</p>
+                      <p className="font-bold" style={{ fontFamily: 'Playfair Display', color: lavender.text }}>{testimonial.name}</p>
+                      <p className="text-sm" style={{ color: lavender.textLight, fontFamily: 'DM Sans' }}>{testimonial.restaurant}</p>
                     </div>
                   </div>
                   <span className="px-3 py-1 rounded-full text-xs font-bold"
-                        style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10B981' }}>
+                        style={{ background: `${lavender.primary}15`, color: lavender.primary }}>
                     {testimonial.revenue}
                   </span>
                 </div>
               </div>
             ))}
           </div>
-
-          {/* Social proof stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {[
-              { value: '500+', label: 'Happy Restaurants', icon: '❤️' },
-              { value: '4.9/5', label: 'Average Rating', icon: '⭐' },
-              { value: '1M+', label: 'Orders Processed', icon: '📋' },
-              { value: '99%', label: 'Would Recommend', icon: '👍' }
-            ].map((stat, i) => (
-              <div key={i} className="text-center p-4 rounded-xl transition-all duration-300 hover:scale-105"
-                   style={{ background: 'rgba(255, 255, 255, 0.5)' }}>
-                <div className="text-3xl mb-2">{stat.icon}</div>
-                <div className="text-2xl font-bold" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>{stat.value}</div>
-                <div className="text-sm" style={{ color: '#4A4A68', fontFamily: 'DM Sans' }}>{stat.label}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="pricing" className="py-20 px-6">
+      {/* Pricing Section */}
+      <section id="pricing" data-section="pricing" className="py-20 px-6">
         <div className="container mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'Playfair Display', color: lavender.text }}>
               Simple, Transparent Pricing
             </h2>
-            <p className="text-lg max-w-2xl mx-auto" style={{ color: '#4A4A68', fontFamily: 'DM Sans' }}>
+            <p className="text-lg max-w-2xl mx-auto" style={{ color: lavender.textLight, fontFamily: 'DM Sans' }}>
               Choose the plan that fits your restaurant
             </p>
           </div>
@@ -793,49 +779,50 @@ export default function Home() {
               <div key={i} 
                    className={`rounded-2xl p-8 transition-all duration-500 hover:-translate-y-2 relative ${
                      plan.popular ? 'transform scale-105' : ''
-                   }`}
+                   } ${visibleSections.has('pricing') ? 'animate-fadeInUp' : 'opacity-0'}`}
                    style={{ 
                      background: plan.popular 
-                       ? 'linear-gradient(135deg, #7C6FCD, #A89BE8)' 
-                       : 'rgba(255, 255, 255, 0.8)',
+                       ? `linear-gradient(135deg, ${lavender.primary}, ${lavender.accent})` 
+                       : lavender.cardBg,
                      backdropFilter: 'blur(20px)',
                      boxShadow: plan.popular 
-                       ? '0 20px 60px rgba(124, 111, 205, 0.4)' 
-                       : '0 10px 40px rgba(124, 111, 205, 0.1)',
-                     border: plan.popular ? 'none' : '1px solid rgba(124, 111, 205, 0.1)'
+                       ? `0 20px 60px ${lavender.primary}40` 
+                       : `0 10px 40px ${lavender.primary}15`,
+                     border: plan.popular ? 'none' : `1px solid ${lavender.primary}20`,
+                     animationDelay: `${i * 0.15}s`
                    }}>
                 {plan.popular && (
                   <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
                     <span className="px-4 py-1 rounded-full text-sm font-bold text-white shadow-lg"
-                          style={{ background: '#F5A623' }}>
+                          style={{ background: '#D4A853' }}>
                       ⭐ Most Popular
                     </span>
                   </div>
                 )}
                 <h3 className="text-2xl font-bold mb-2" 
-                    style={{ fontFamily: 'Playfair Display', color: plan.popular ? 'white' : '#1A1535' }}>
+                    style={{ fontFamily: 'Playfair Display', color: plan.popular ? lavender.white : lavender.text }}>
                   {plan.name}
                 </h3>
                 <div className="mb-6">
                   <span className="text-5xl font-bold" 
-                        style={{ fontFamily: 'Playfair Display', color: plan.popular ? 'white' : '#1A1535' }}>
+                        style={{ fontFamily: 'Playfair Display', color: plan.popular ? lavender.white : lavender.text }}>
                     {plan.price}
                   </span>
-                  <span style={{ color: plan.popular ? 'rgba(255,255,255,0.8)' : '#4A4A68' }}>{plan.period}</span>
+                  <span style={{ color: plan.popular ? `${lavender.white}cc` : lavender.textLight }}>{plan.period}</span>
                 </div>
                 <ul className="space-y-3 mb-8">
                   {plan.features.map((feature, j) => (
                     <li key={j} className="flex items-center gap-2" 
-                        style={{ color: plan.popular ? 'white' : '#4A4A68', fontFamily: 'DM Sans' }}>
-                      <Check className="h-4 w-4" style={{ color: plan.popular ? '#F5A623' : '#10B981' }} />
+                        style={{ color: plan.popular ? lavender.white : lavender.textLight, fontFamily: 'DM Sans' }}>
+                      <Check className="h-4 w-4" style={{ color: plan.popular ? '#D4A853' : lavender.primary }} />
                       {feature}
                     </li>
                   ))}
                 </ul>
                 <Button className="w-full rounded-full py-6 text-lg font-semibold transition-all duration-300 hover:scale-105"
                         style={{ 
-                          background: plan.popular ? 'white' : '#7C6FCD',
-                          color: plan.popular ? '#7C6FCD' : 'white',
+                          background: plan.popular ? lavender.white : lavender.primary,
+                          color: plan.popular ? lavender.primary : lavender.white,
                           fontFamily: 'DM Sans'
                         }}
                         onClick={() => router.push('/signup')}>
@@ -844,20 +831,14 @@ export default function Home() {
               </div>
             ))}
           </div>
-
-          <div className="text-center mt-12 flex flex-wrap gap-6 justify-center" style={{ color: '#4A4A68', fontFamily: 'DM Sans' }}>
-            <span className="flex items-center"><Check className="h-4 w-4 mr-2" style={{ color: '#10B981' }} /> 14-day free trial</span>
-            <span className="flex items-center"><Check className="h-4 w-4 mr-2" style={{ color: '#10B981' }} /> No setup fees</span>
-            <span className="flex items-center"><Check className="h-4 w-4 mr-2" style={{ color: '#10B981' }} /> Cancel anytime</span>
-          </div>
         </div>
       </section>
 
       {/* FAQ Section */}
-      <section className="py-20 px-6" style={{ background: 'linear-gradient(135deg, #E8E3FF 0%, #D4CEFF 100%)' }}>
+      <section data-section="faq" className="py-20 px-6" style={{ background: lavender.light }}>
         <div className="container mx-auto max-w-3xl">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ fontFamily: 'Playfair Display', color: lavender.text }}>
               Frequently Asked Questions
             </h2>
           </div>
@@ -870,10 +851,16 @@ export default function Home() {
               { q: "What if I need help?", a: "We offer 24/7 support via chat, email, and phone. Professional plan includes priority support." },
               { q: "Can I cancel anytime?", a: "Yes! No contracts, no cancellation fees. You can upgrade, downgrade, or cancel whenever you want." }
             ].map((faq, i) => (
-              <div key={i} className="rounded-xl p-6 transition-all duration-300 hover:shadow-lg"
-                   style={{ background: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)' }}>
-                <h3 className="font-bold mb-2" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>{faq.q}</h3>
-                <p style={{ color: '#4A4A68', fontFamily: 'DM Sans', lineHeight: '1.6' }}>{faq.a}</p>
+              <div key={i} className={`rounded-xl p-6 transition-all duration-300 hover:shadow-lg cursor-pointer ${
+                visibleSections.has('faq') ? 'animate-fadeInUp' : 'opacity-0'
+              }`}
+                   style={{ 
+                     background: lavender.cardBg, 
+                     backdropFilter: 'blur(10px)',
+                     animationDelay: `${i * 0.1}s`
+                   }}>
+                <h3 className="font-bold mb-2" style={{ fontFamily: 'Playfair Display', color: lavender.text }}>{faq.q}</h3>
+                <p style={{ color: lavender.textLight, fontFamily: 'DM Sans', lineHeight: '1.6' }}>{faq.a}</p>
               </div>
             ))}
           </div>
@@ -881,14 +868,14 @@ export default function Home() {
       </section>
 
       {/* Contact Section */}
-      <section id="contact" className="py-20 px-6">
+      <section id="contact" data-section="contact" className="py-20 px-6">
         <div className="container mx-auto">
           <div className="grid lg:grid-cols-2 gap-12">
-            <div>
-              <h2 className="text-4xl md:text-5xl font-bold mb-6" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>
+            <div className={visibleSections.has('contact') ? 'animate-fadeInLeft' : 'opacity-0'}>
+              <h2 className="text-4xl md:text-5xl font-bold mb-6" style={{ fontFamily: 'Playfair Display', color: lavender.text }}>
                 Get in Touch
               </h2>
-              <p className="text-lg mb-8" style={{ color: '#4A4A68', fontFamily: 'DM Sans', lineHeight: '1.8' }}>
+              <p className="text-lg mb-8" style={{ color: lavender.textLight, fontFamily: 'DM Sans', lineHeight: '1.8' }}>
                 Have questions? We'd love to hear from you.
               </p>
 
@@ -900,90 +887,70 @@ export default function Home() {
                   { icon: <Headphones className="h-5 w-5 text-white" />, label: "Support", value: "24/7 Available" }
                 ].map((contact, i) => (
                   <div key={i} className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: '#7C6FCD' }}>
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: lavender.primary }}>
                       {contact.icon}
                     </div>
                     <div>
-                      <p className="font-semibold" style={{ color: '#1A1535', fontFamily: 'DM Sans' }}>{contact.label}</p>
-                      <p style={{ color: '#4A4A68' }}>{contact.value}</p>
+                      <p className="font-semibold" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>{contact.label}</p>
+                      <p style={{ color: lavender.textLight }}>{contact.value}</p>
                     </div>
                   </div>
                 ))}
               </div>
-
-              <div className="mt-12">
-                <h3 className="text-xl font-bold mb-4" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>Our Team</h3>
-                <div className="flex gap-4">
-                  {[
-                    { name: 'Shaurya Deep', role: 'Founder & CEO', initials: 'SD' },
-                    { name: 'Dev Team', role: 'Engineering', initials: 'DT' },
-                    { name: 'Support Team', role: '24/7 Support', initials: 'ST' }
-                  ].map((member, i) => (
-                    <div key={i} className="text-center">
-                      <div className="w-14 h-14 rounded-full flex items-center justify-center font-bold text-white mb-2 shadow-lg transition-transform duration-300 hover:scale-110"
-                           style={{ background: ['#7C6FCD', '#F5A623', '#10B981'][i] }}>
-                        {member.initials}
-                      </div>
-                      <p className="text-sm font-semibold" style={{ color: '#1A1535' }}>{member.name}</p>
-                      <p className="text-xs" style={{ color: '#4A4A68' }}>{member.role}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
 
-            <div className="rounded-2xl p-8 shadow-xl" 
-                 style={{ background: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(20px)' }}>
-              <h3 className="text-2xl font-bold mb-6" style={{ fontFamily: 'Playfair Display', color: '#1A1535' }}>
+            <div className={`rounded-2xl p-8 shadow-xl ${visibleSections.has('contact') ? 'animate-fadeInRight' : 'opacity-0'}`} 
+                 style={{ background: lavender.cardBg, backdropFilter: 'blur(20px)' }}>
+              <h3 className="text-2xl font-bold mb-6" style={{ fontFamily: 'Playfair Display', color: lavender.text }}>
                 Send us a Message
               </h3>
               <form className="space-y-6" onSubmit={(e) => e.preventDefault()}>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2" style={{ color: '#1A1535', fontFamily: 'DM Sans' }}>Name</label>
+                    <label className="block text-sm font-medium mb-2" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>Name</label>
                     <input type="text" placeholder="Your name" 
-                           className="w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none"
-                           style={{ borderColor: 'rgba(124, 111, 205, 0.2)', background: 'white', fontFamily: 'DM Sans' }}
-                           onFocus={(e) => e.target.style.borderColor = '#7C6FCD'}
-                           onBlur={(e) => e.target.style.borderColor = 'rgba(124, 111, 205, 0.2)'} />
+                           className="w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none focus:scale-[1.02]"
+                           style={{ borderColor: `${lavender.primary}30`, background: lavender.white, fontFamily: 'DM Sans' }}
+                           onFocus={(e) => e.target.style.borderColor = lavender.primary}
+                           onBlur={(e) => e.target.style.borderColor = `${lavender.primary}30`} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2" style={{ color: '#1A1535', fontFamily: 'DM Sans' }}>Phone</label>
+                    <label className="block text-sm font-medium mb-2" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>Phone</label>
                     <input type="tel" placeholder="+91 98765 43210" 
-                           className="w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none"
-                           style={{ borderColor: 'rgba(124, 111, 205, 0.2)', background: 'white', fontFamily: 'DM Sans' }}
-                           onFocus={(e) => e.target.style.borderColor = '#7C6FCD'}
-                           onBlur={(e) => e.target.style.borderColor = 'rgba(124, 111, 205, 0.2)'} />
+                           className="w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none focus:scale-[1.02]"
+                           style={{ borderColor: `${lavender.primary}30`, background: lavender.white, fontFamily: 'DM Sans' }}
+                           onFocus={(e) => e.target.style.borderColor = lavender.primary}
+                           onBlur={(e) => e.target.style.borderColor = `${lavender.primary}30`} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: '#1A1535', fontFamily: 'DM Sans' }}>Email</label>
+                  <label className="block text-sm font-medium mb-2" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>Email</label>
                   <input type="email" placeholder="you@example.com" 
-                         className="w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none"
-                         style={{ borderColor: 'rgba(124, 111, 205, 0.2)', background: 'white', fontFamily: 'DM Sans' }}
-                         onFocus={(e) => e.target.style.borderColor = '#7C6FCD'}
-                         onBlur={(e) => e.target.style.borderColor = 'rgba(124, 111, 205, 0.2)'} />
+                         className="w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none focus:scale-[1.02]"
+                         style={{ borderColor: `${lavender.primary}30`, background: lavender.white, fontFamily: 'DM Sans' }}
+                         onFocus={(e) => e.target.style.borderColor = lavender.primary}
+                         onBlur={(e) => e.target.style.borderColor = `${lavender.primary}30`} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: '#1A1535', fontFamily: 'DM Sans' }}>Restaurant Name</label>
+                  <label className="block text-sm font-medium mb-2" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>Restaurant Name</label>
                   <input type="text" placeholder="Your restaurant" 
-                         className="w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none"
-                         style={{ borderColor: 'rgba(124, 111, 205, 0.2)', background: 'white', fontFamily: 'DM Sans' }}
-                         onFocus={(e) => e.target.style.borderColor = '#7C6FCD'}
-                         onBlur={(e) => e.target.style.borderColor = 'rgba(124, 111, 205, 0.2)'} />
+                         className="w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none focus:scale-[1.02]"
+                         style={{ borderColor: `${lavender.primary}30`, background: lavender.white, fontFamily: 'DM Sans' }}
+                         onFocus={(e) => e.target.style.borderColor = lavender.primary}
+                         onBlur={(e) => e.target.style.borderColor = `${lavender.primary}30`} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2" style={{ color: '#1A1535', fontFamily: 'DM Sans' }}>Message</label>
+                  <label className="block text-sm font-medium mb-2" style={{ color: lavender.text, fontFamily: 'DM Sans' }}>Message</label>
                   <textarea rows={4} placeholder="Tell us about your restaurant..." 
-                            className="w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none resize-none"
-                            style={{ borderColor: 'rgba(124, 111, 205, 0.2)', background: 'white', fontFamily: 'DM Sans' }}
-                            onFocus={(e) => e.target.style.borderColor = '#7C6FCD'}
-                            onBlur={(e) => e.target.style.borderColor = 'rgba(124, 111, 205, 0.2)'}></textarea>
+                            className="w-full px-4 py-3 rounded-xl border-2 transition-all duration-300 focus:outline-none resize-none focus:scale-[1.02]"
+                            style={{ borderColor: `${lavender.primary}30`, background: lavender.white, fontFamily: 'DM Sans' }}
+                            onFocus={(e) => e.target.style.borderColor = lavender.primary}
+                            onBlur={(e) => e.target.style.borderColor = `${lavender.primary}30`}></textarea>
                 </div>
                 <Button type="submit" 
-                        className="w-full rounded-xl py-6 text-lg font-semibold transition-all duration-300 hover:scale-105 hover:shadow-xl"
-                        style={{ background: '#7C6FCD', color: 'white', fontFamily: 'DM Sans' }}>
-                  Send Message <ChevronRight className="ml-2 h-5 w-5" />
+                        className="w-full rounded-xl py-6 text-lg font-semibold transition-all duration-300 hover:scale-105 hover:shadow-xl group"
+                        style={{ background: lavender.primary, color: lavender.white, fontFamily: 'DM Sans' }}>
+                  Send Message <ChevronRight className="ml-2 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
                 </Button>
               </form>
             </div>
@@ -991,9 +958,11 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Mobile App Download */}
-      <section className="py-20 px-6" style={{ background: '#1A1535' }}>
-        <div className="container mx-auto text-center">
+      {/* Mobile App Section */}
+      <section data-section="mobile" className="py-20 px-6 relative overflow-hidden" style={{ background: lavender.darkest }}>
+        <div className="absolute inset-0 opacity-10" 
+             style={{ background: `linear-gradient(135deg, ${lavender.primary}, ${lavender.accent})` }}></div>
+        <div className="container mx-auto text-center relative z-10">
           <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white" style={{ fontFamily: 'Playfair Display' }}>
             Take It With You
           </h2>
@@ -1002,13 +971,13 @@ export default function Home() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" variant="outline"
-                    className="rounded-full px-8 py-6 text-lg border-2 transition-all duration-300 hover:scale-105"
-                    style={{ borderColor: 'white', color: 'white', fontFamily: 'DM Sans' }}>
+                    className="rounded-full px-8 py-6 text-lg border-2 transition-all duration-300 hover:scale-105 hover:bg-white/10"
+                    style={{ borderColor: lavender.white, color: lavender.white, fontFamily: 'DM Sans' }}>
               <Smartphone className="mr-2 h-5 w-5" /> iOS App
             </Button>
             <Button size="lg" variant="outline"
-                    className="rounded-full px-8 py-6 text-lg border-2 transition-all duration-300 hover:scale-105"
-                    style={{ borderColor: 'white', color: 'white', fontFamily: 'DM Sans' }}>
+                    className="rounded-full px-8 py-6 text-lg border-2 transition-all duration-300 hover:scale-105 hover:bg-white/10"
+                    style={{ borderColor: lavender.white, color: lavender.white, fontFamily: 'DM Sans' }}>
               <Monitor className="mr-2 h-5 w-5" /> Android App
             </Button>
           </div>
@@ -1016,23 +985,25 @@ export default function Home() {
       </section>
 
       {/* Footer CTA */}
-      <section className="py-20 px-6 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #7C6FCD, #A89BE8)' }}>
+      <section data-section="cta" className="py-20 px-6 relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${lavender.primary}, ${lavender.accent})` }}>
+        <div className="absolute inset-0 opacity-10" 
+             style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.4\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }}></div>
         <div className="container mx-auto text-center relative z-10">
           <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white" style={{ fontFamily: 'Playfair Display' }}>
             Join 500+ Restaurants Growing
           </h2>
           <p className="text-lg mb-8 text-purple-100 max-w-2xl mx-auto" style={{ fontFamily: 'DM Sans' }}>
-            Start your free trial today
+            Start your free trial today and transform your restaurant operations
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button size="lg" onClick={() => router.push('/signup')}
-                    className="rounded-full px-8 py-6 text-lg font-semibold transition-all duration-300 hover:scale-105 hover:shadow-2xl"
-                    style={{ background: '#F5A623', color: '#1A1535', fontFamily: 'DM Sans' }}>
-              Get Started Free <ChevronRight className="ml-2 h-5 w-5" />
+                    className="rounded-full px-8 py-6 text-lg font-semibold transition-all duration-300 hover:scale-105 hover:shadow-2xl group"
+                    style={{ background: lavender.white, color: lavender.primary, fontFamily: 'DM Sans' }}>
+              Get Started Free <Rocket className="ml-2 h-5 w-5 transition-transform duration-300 group-hover:translate-x-1" />
             </Button>
             <Button size="lg" variant="outline" onClick={() => router.push('/login')}
-                    className="rounded-full px-8 py-6 text-lg border-2 transition-all duration-300 hover:scale-105"
-                    style={{ borderColor: 'white', color: 'white', fontFamily: 'DM Sans' }}>
+                    className="rounded-full px-8 py-6 text-lg border-2 transition-all duration-300 hover:scale-105 hover:bg-white/10"
+                    style={{ borderColor: lavender.white, color: lavender.white, fontFamily: 'DM Sans' }}>
               Login to Dashboard
             </Button>
           </div>
@@ -1040,7 +1011,7 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 px-6 border-t" style={{ background: 'rgba(26, 21, 53, 0.95)', borderColor: 'rgba(124, 111, 205, 0.2)' }}>
+      <footer className="py-12 px-6 border-t" style={{ background: `${lavender.darkest}ee`, borderColor: `${lavender.primary}30` }}>
         <div className="container mx-auto">
           <div className="grid md:grid-cols-5 gap-8 mb-8">
             <div className="md:col-span-2">
@@ -1053,9 +1024,9 @@ export default function Home() {
               </p>
               <div className="flex gap-2">
                 <input type="email" placeholder="Enter your email" 
-                       className="flex-1 px-4 py-2 rounded-lg text-sm transition-all duration-300 focus:outline-none"
-                       style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(124, 111, 205, 0.3)', color: 'white', fontFamily: 'DM Sans' }} />
-                <Button size="sm" style={{ background: '#7C6FCD', color: 'white' }}>Subscribe</Button>
+                       className="flex-1 px-4 py-2 rounded-lg text-sm transition-all duration-300 focus:outline-none focus:scale-[1.02]"
+                       style={{ background: 'rgba(255,255,255,0.1)', border: `1px solid ${lavender.primary}30`, color: 'white', fontFamily: 'DM Sans' }} />
+                <Button size="sm" className="transition-all duration-300 hover:scale-105" style={{ background: lavender.primary, color: lavender.white }}>Subscribe</Button>
               </div>
             </div>
 
@@ -1080,13 +1051,13 @@ export default function Home() {
             ))}
           </div>
 
-          <div className="border-t pt-8 flex flex-col md:flex-row justify-between items-center" style={{ borderColor: 'rgba(124, 111, 205, 0.2)' }}>
+          <div className="border-t pt-8 flex flex-col md:flex-row justify-between items-center" style={{ borderColor: `${lavender.primary}30` }}>
             <p className="text-gray-400 text-sm" style={{ fontFamily: 'DM Sans' }}>
               © 2026 RestaurantPro. Made with ❤️ by Team Shaurya | Nexus
             </p>
             <div className="flex gap-4 mt-4 md:mt-0">
               {['Twitter', 'LinkedIn', 'Instagram', 'YouTube'].map((social, i) => (
-                <a key={i} href="#" className="text-gray-400 transition-colors duration-300 hover:text-white">
+                <a key={i} href="#" className="text-gray-400 transition-colors duration-300 hover:text-white hover:scale-110">
                   <span className="text-sm">{social}</span>
                 </a>
               ))}
@@ -1095,7 +1066,7 @@ export default function Home() {
         </div>
       </footer>
 
-      {/* Custom CSS */}
+      {/* Custom CSS Animations */}
       <style jsx global>{`
         html {
           scroll-behavior: smooth;
@@ -1106,16 +1077,104 @@ export default function Home() {
         }
         
         ::-webkit-scrollbar-track {
-          background: #F3F1FF;
+          background: ${lavender.lighter};
         }
         
         ::-webkit-scrollbar-thumb {
-          background: #7C6FCD;
+          background: linear-gradient(180deg, ${lavender.primary}, ${lavender.accent});
           border-radius: 4px;
         }
         
         ::-webkit-scrollbar-thumb:hover {
-          background: #A89BE8;
+          background: ${lavender.accent};
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes fadeInLeft {
+          from {
+            opacity: 0;
+            transform: translateX(-30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes fadeInRight {
+          from {
+            opacity: 0;
+            transform: translateX(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes float {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-20px);
+          }
+        }
+
+        .animate-fadeInUp {
+          animation: fadeInUp 0.8s ease-out forwards;
+        }
+
+        .animate-fadeInLeft {
+          animation: fadeInLeft 0.8s ease-out forwards;
+        }
+
+        .animate-fadeInRight {
+          animation: fadeInRight 0.8s ease-out forwards;
+        }
+
+        .animate-slideDown {
+          animation: slideDown 0.3s ease-out forwards;
+        }
+
+        .animate-float {
+          animation: float 3s ease-in-out infinite;
+        }
+
+        /* Smooth section transitions */
+        section {
+          transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+
+        /* Card hover effects */
+        .hover-card {
+          transition: all 0.3s ease;
+        }
+
+        .hover-card:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 20px 40px rgba(155, 126, 200, 0.15);
         }
       `}</style>
     </div>
