@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import { Watermark } from '@/components/watermark'
 
 // Use system fonts instead of Google Fonts for offline compatibility
 const geistSans = {
@@ -31,7 +32,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        {children}
+        <Watermark />
+      </body>
     </html>
   )
 }
