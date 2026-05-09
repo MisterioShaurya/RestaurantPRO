@@ -2,11 +2,22 @@
   {
     "_id": "691ccb974fb6d35125fcc924",
     "name": "abc",
-    "quantity": 2,
+    "quantity": 20,
     "unit": "kg",
-    "minStock": 123,
+    "minStock": 10,
     "cost": 1212,
     "category": "a1",
     "createdAt": "2025-11-18T19:40:07.408Z"
+  },
+  {
+    "_id": "1778356749036",
+    "name": "bbb",
+    "quantity": 20,
+    "unit": "kg",
+    "minStock": 10,
+    "cost": 200,
+    "category": "bbbbbb",
+    "restaurantId": "69caec622ca957493d2420f8",
+    "createdAt": "2026-05-09T19:59:09.036Z"
   }
 ]

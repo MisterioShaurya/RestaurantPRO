@@ -34,11 +34,16 @@ export async function POST(req: NextRequest) {
     const db = client.db('restaurant_pos')
 
     const staff = await db.collection('staff').insertOne({
-      ...data,
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      role: data.role,
       salary: data.salary ? Number(data.salary) : 0,
+      salaryDay: data.salaryDay ? Number(data.salaryDay) : 1,
       restaurantId,
       status: 'active',
       joinDate: new Date(),
+      createdAt: new Date(),
     })
 
     return NextResponse.json(
