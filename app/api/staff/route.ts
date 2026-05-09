@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
 
     const staff = await db.collection('staff').insertOne({
       ...data,
+      salary: data.salary ? Number(data.salary) : 0,
       restaurantId,
       status: 'active',
       joinDate: new Date(),

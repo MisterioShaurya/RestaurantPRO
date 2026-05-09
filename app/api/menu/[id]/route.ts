@@ -33,7 +33,7 @@ export async function PATCH(
     const updates = await request.json()
 
     const client = await getMongoClient()
-    const db = client.db('restaurant')
+    const db = client.db('restaurant_pos')
 
     // Convert price to number if provided
     if (updates.price) {
@@ -46,7 +46,7 @@ export async function PATCH(
       { returnDocument: 'after' }
     )
 
-    if (!result.value) {
+    if (!result?.value) {
       return NextResponse.json({ error: 'Menu item not found' }, { status: 404 })
     }
 
@@ -70,7 +70,7 @@ export async function DELETE(
     const { id } = params
 
     const client = await getMongoClient()
-    const db = client.db('restaurant')
+    const db = client.db('restaurant_pos')
 
     const result = await db.collection('menu').deleteOne({ _id: new ObjectId(id), userId: user.id })
 

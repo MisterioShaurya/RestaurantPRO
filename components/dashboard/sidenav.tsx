@@ -34,6 +34,7 @@ export default function SideNav({ isOpen, onToggle }: SideNavProps) {
     { label: 'Orders', href: '/dashboard/orders', icon: '📋', color: 'cyan' },
     { label: 'Inventory', href: '/dashboard/inventory', icon: '📦', color: 'pink' },
     { label: 'Staff', href: '/dashboard/staff', icon: '👥', color: 'indigo' },
+    { label: 'Payroll', href: '/dashboard/payroll', icon: '💰', color: 'emerald' },
     { label: 'Reservations', href: '/dashboard/reservations', icon: '📅', color: 'rose' },
     { label: 'KOT Logs', href: '/dashboard/order-logs', icon: '🧾', color: 'teal' },
     { label: 'Analytics', href: '/dashboard/analytics', icon: '📈', color: 'lime' },

@@ -9,6 +9,7 @@ interface StaffMember {
   email: string
   role: string
   phone: string
+  salary: number
   joinDate: string
   status: 'active' | 'inactive'
 }
@@ -24,6 +25,7 @@ export default function StaffPage() {
     email: '',
     phone: '',
     role: 'waiter',
+    salary: 0,
   })
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export default function StaffPage() {
       })
       if (res.ok) {
         fetchStaff()
-        setFormData({ name: '', email: '', phone: '', role: 'waiter' })
+        setFormData({ name: '', email: '', phone: '', role: 'waiter', salary: 0 })
         setEditingId(null)
         setShowForm(false)
       }
@@ -72,6 +74,7 @@ export default function StaffPage() {
       email: member.email,
       phone: member.phone,
       role: member.role,
+      salary: member.salary || 0,
     })
     setEditingId(member._id)
     setShowForm(true)
@@ -88,6 +91,8 @@ export default function StaffPage() {
       console.log('Error deleting staff:', err)
     }
   }
+
+  const totalSalary = staff.reduce((sum, member) => sum + (member.salary || 0), 0)
 
   return (
     <div className="min-h-screen bg-linear-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4 sm:p-6 lg:p-8">
@@ -110,7 +115,7 @@ export default function StaffPage() {
             onClick={() => {
               setShowForm(!showForm)
               setEditingId(null)
-              setFormData({ name: '', email: '', phone: '', role: 'waiter' })
+              setFormData({ name: '', email: '', phone: '', role: 'waiter', salary: 0 })
             }}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition shadow-md"
           >
@@ -170,6 +175,18 @@ export default function StaffPage() {
                 <option value="cashier">Cashier</option>
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Salary (₹/month)</label>
+              <input
+                type="number"
+                placeholder="0"
+                min="0"
+                step="0.01"
+                value={formData.salary}
+                onChange={(e) => setFormData({ ...formData, salary: Number(e.target.value) })}
+                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
+              />
+            </div>
             <button
               type="submit"
               className="md:col-span-2 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition"
@@ -177,6 +194,24 @@ export default function StaffPage() {
               {editingId ? 'Update Staff' : 'Add Staff Member'}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Summary Cards */}
+      {!loading && staff.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow border border-slate-200 dark:border-slate-700">
+            <p className="text-xs font-semibold text-slate-500 uppercase">Total Staff</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">{staff.length}</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow border border-slate-200 dark:border-slate-700">
+            <p className="text-xs font-semibold text-slate-500 uppercase">Active Staff</p>
+            <p className="text-2xl font-bold text-emerald-600">{staff.filter(s => s.status === 'active').length}</p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-4 shadow border border-slate-200 dark:border-slate-700">
+            <p className="text-xs font-semibold text-slate-500 uppercase">Total Monthly Salary</p>
+            <p className="text-2xl font-bold text-indigo-600">₹{totalSalary.toLocaleString()}</p>
+          </div>
         </div>
       )}
 
@@ -195,6 +230,7 @@ export default function StaffPage() {
                   <th className="px-6 py-4 text-left text-sm font-bold text-slate-900 dark:text-white">Email</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-slate-900 dark:text-white">Phone</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-slate-900 dark:text-white">Role</th>
+                  <th className="px-6 py-4 text-left text-sm font-bold text-slate-900 dark:text-white">Salary</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-slate-900 dark:text-white">Status</th>
                   <th className="px-6 py-4 text-left text-sm font-bold text-slate-900 dark:text-white">Actions</th>
                 </tr>
@@ -209,6 +245,9 @@ export default function StaffPage() {
                       <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-bold capitalize">
                         {member.role}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-900 dark:text-white">
+                      ₹{(member.salary || 0).toLocaleString()}
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <span
