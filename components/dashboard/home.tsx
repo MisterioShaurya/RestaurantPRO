@@ -8,6 +8,7 @@ interface Stats {
   totalRevenue: number
   activeOrders: number
   tableOccupancy: number
+  todayOrdersCount: number
 }
 
 interface Order {
@@ -27,6 +28,7 @@ export default function DashboardHome({ user }: { user: any }) {
     totalRevenue: 0,
     activeOrders: 0,
     tableOccupancy: 0,
+    todayOrdersCount: 0,
   })
   const [recentOrders, setRecentOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
@@ -56,8 +58,9 @@ export default function DashboardHome({ user }: { user: any }) {
 
   // Admin view - show all
   const statCards = [
-    { label: 'Total Orders', value: stats.totalOrders, icon: '📋', color: 'from-teal-500 to-teal-600', bgColor: 'bg-teal-50' },
+    { label: 'Today Orders', value: stats.todayOrdersCount, icon: '📋', color: 'from-teal-500 to-teal-600', bgColor: 'bg-teal-50' },
     { label: 'Revenue Today', value: `₹${stats.totalRevenue}`, icon: '💵', color: 'from-green-500 to-green-600', bgColor: 'bg-green-50' },
+    { label: 'Total Orders', value: stats.totalOrders, icon: '📦', color: 'from-blue-500 to-blue-600', bgColor: 'bg-blue-50' },
     { label: 'Active Orders', value: stats.activeOrders, icon: '⏱️', color: 'from-orange-500 to-orange-600', bgColor: 'bg-orange-50' },
     { label: 'Table Occupancy', value: `${stats.tableOccupancy}%`, icon: '🍽️', color: 'from-rose-500 to-rose-600', bgColor: 'bg-rose-50' },
   ]

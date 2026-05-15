@@ -12,6 +12,105 @@ export async function POST(req: NextRequest) {
   try {
     const client = await getMongoClient()
     const db = client.db('restaurant_pos')
+
+    // First, check if this is a role-based login (chef@xxx.com or cashier@xxx.com)
+    let role: string | null = null
+    let restaurantUsername: string | null = null
+
+    if (email.includes('@')) {
+      const [localPart, domain] = email.split('@')
+      if (domain) {
+        const domainName = domain.split('.')[0] // Get "restaurantusername" from "restaurantusername.com"
+        
+        const chefMatch = localPart.match(/^chef$/)
+        const cashierMatch = localPart.match(/^cashier$/)
+        
+        if (chefMatch) {
+          role = 'chef'
+          restaurantUsername = domainName
+        } else if (cashierMatch) {
+          role = 'cashier'
+          restaurantUsername = domainName
+        }
+      }
+    }
+
+    if (role && restaurantUsername) {
+      // Role-based login: find the admin user by restaurant username to get restaurantId
+      const adminUser = await db.collection('users').findOne({
+        username: restaurantUsername,
+        isAdmin: true
+      })
+
+      if (!adminUser) {
+        return NextResponse.json(
+          { message: 'Restaurant not found' },
+          { status: 401 }
+        )
+      }
+
+      // Find the role account in the role_accounts collection
+      const roleAccount = await db.collection('role_accounts').findOne({
+        email: email,
+        restaurantId: adminUser._id.toString(),
+        isActive: true
+      })
+
+      if (!roleAccount || !(await bcrypt.compare(password, roleAccount.password))) {
+        return NextResponse.json(
+          { message: 'Invalid credentials' },
+          { status: 401 }
+        )
+      }
+
+      // Create JWT token for role user
+      const token = jwt.sign({
+        userId: roleAccount._id.toString(),
+        email: roleAccount.email,
+        username: roleAccount.name,
+        role: roleAccount.role,
+        restaurantName: adminUser.restaurantName,
+        restaurantId: adminUser._id.toString(),
+        isAdmin: false,
+        isRoleAccount: true
+      }, JWT_SECRET, { expiresIn: '24h' })
+
+      const response = NextResponse.json({
+        message: 'Logged in successfully',
+        token,
+        user: {
+          id: roleAccount._id.toString(),
+          username: roleAccount.name,
+          email: roleAccount.email,
+          name: roleAccount.name,
+          restaurantName: adminUser.restaurantName,
+          role: roleAccount.role,
+          isAdmin: false,
+          isRoleAccount: true,
+          tablesCount: adminUser.tablesCount || 0
+        }
+      })
+
+      // Set token as cookie
+      response.cookies.set('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 // 24 hours
+      })
+      
+      // Set userRole cookie for client-side checks
+      response.cookies.set('userRole', roleAccount.role, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24
+      })
+
+      return response
+    }
+
+    // Regular admin login flow
     const users = db.collection('users')
 
     // Find user by email
@@ -48,6 +147,7 @@ export async function POST(req: NextRequest) {
       userId: user._id.toString(),
       email: user.email,
       username: user.username,
+      role: 'admin',
       restaurantName: user.restaurantName,
       restaurantId: user._id.toString(),
       isAdmin: user.isAdmin || false
@@ -67,6 +167,7 @@ export async function POST(req: NextRequest) {
         username: user.username,
         email: user.email,
         name: user.name,
+        role: 'admin',
         restaurantName: user.restaurantName,
         isAdmin: user.isAdmin || false,
         isFirstLogin: user.isFirstLogin || false,
@@ -81,6 +182,13 @@ export async function POST(req: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 // 24 hours
+    })
+    
+    response.cookies.set('userRole', 'admin', {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24
     })
 
     return response

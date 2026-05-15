@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
+  const [detectedRole, setDetectedRole] = useState<string | null>(null)
 
   // Lavender color palette matching landing page
   const lavender = {
@@ -34,9 +35,41 @@ export default function LoginPage() {
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (token) {
-      router.push('/dashboard')
+      const userStr = localStorage.getItem('user')
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr)
+          if (user.role === 'chef') {
+            router.push('/dashboard/order-logs')
+          } else if (user.role === 'cashier') {
+            router.push('/dashboard')
+          } else {
+            router.push('/dashboard')
+          }
+        } catch {
+          router.push('/dashboard')
+        }
+      } else {
+        router.push('/dashboard')
+      }
     }
   }, [router])
+
+  // Detect role from email input
+  useEffect(() => {
+    if (formData.email.includes('@')) {
+      const localPart = formData.email.split('@')[0]
+      if (localPart === 'chef') {
+        setDetectedRole('chef')
+      } else if (localPart === 'cashier') {
+        setDetectedRole('cashier')
+      } else {
+        setDetectedRole(null)
+      }
+    } else {
+      setDetectedRole(null)
+    }
+  }, [formData.email])
 
   const validateForm = () => {
     const errors: Record<string, string> = {}
@@ -76,6 +109,7 @@ export default function LoginPage() {
       // Store JWT token and user data in localStorage
       localStorage.setItem('token', data.token)
       localStorage.setItem('user', JSON.stringify(data.user))
+      localStorage.setItem('currentUser', JSON.stringify(data.user))
       
       // Also store in cookies for server-side authentication
       document.cookie = `token=${data.token}; path=/; max-age=${24 * 60 * 60}; SameSite=Lax`
@@ -83,7 +117,12 @@ export default function LoginPage() {
 
       setSuccess('Login successful! Redirecting...')
       setTimeout(() => {
-        router.push('/dashboard')
+        // Redirect based on role
+        if (data.user.role === 'chef') {
+          router.push('/dashboard/order-logs')
+        } else {
+          router.push('/dashboard')
+        }
       }, 1500)
     } catch (err) {
       setError('Network error. Please check your connection.')
@@ -137,6 +176,12 @@ export default function LoginPage() {
             <p className="text-sm mt-2" style={{ color: lavender.textLight, fontFamily: 'DM Sans, sans-serif' }}>
               Sign in to your restaurant dashboard
             </p>
+            {detectedRole && (
+              <div className="mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold"
+                   style={{ background: `${lavender.primary}20`, color: lavender.primary }}>
+                {detectedRole === 'chef' ? '👨‍🍳 Chef Login' : detectedRole === 'cashier' ? '💳 Cashier Login' : ''}
+              </div>
+            )}
           </div>
 
           {/* Success Message */}
@@ -185,7 +230,7 @@ export default function LoginPage() {
                 onBlur={(e) => {
                   if (!fieldErrors.email) e.target.style.borderColor = `${lavender.primary}30`
                 }}
-                placeholder="admin@restaurant.com"
+                placeholder="admin@restaurant.com or chef@restaurant.com"
               />
               {fieldErrors.email && (
                 <p className="text-xs text-red-600 mt-1 font-medium">{fieldErrors.email}</p>
@@ -255,6 +300,16 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          {/* Login hints */}
+          <div className="mt-6 p-4 rounded-lg" style={{ background: lavender.lighter, border: `1px solid ${lavender.primary}20` }}>
+            <p className="text-xs font-semibold mb-2" style={{ color: lavender.text }}>Login Formats:</p>
+            <ul className="text-xs space-y-1" style={{ color: lavender.textLight }}>
+              <li>👑 Admin: admin@restaurant.com</li>
+              <li>👨‍🍳 Chef: chef@restaurant.com</li>
+              <li>💳 Cashier: cashier@restaurant.com</li>
+            </ul>
+          </div>
 
           {/* Signup Link */}
           <div className="mt-6 text-center">

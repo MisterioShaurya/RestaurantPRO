@@ -37,6 +37,7 @@ interface KOTLog {
   timestamp: string
   kotCount: number
   isNew?: boolean
+  kotStatus?: 'pending' | 'preparing' | 'done' | 'cancelled'
 }
 
 interface TableOrderState {
@@ -1015,11 +1016,19 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
                 No kitchen orders yet
               </div>
             ) : (
-              kotLogs.map((log) => (
+              kotLogs.map((log) => {
+                const logStatus = log.kotStatus || 'pending'
+                return (
                 <div
                   key={log.id}
                   className={`border rounded-lg p-3 shadow-sm ${
-                    log.isNew ? 'bg-yellow-50 border-yellow-300' : 'bg-orange-50 border-orange-200'
+                    logStatus === 'done'
+                      ? 'bg-emerald-50 border-emerald-300'
+                      : logStatus === 'cancelled'
+                      ? 'bg-red-50 border-red-300'
+                      : log.isNew
+                      ? 'bg-yellow-50 border-yellow-300'
+                      : 'bg-orange-50 border-orange-200'
                   }`}
                 >
                   <div className="flex justify-between items-start mb-2">
@@ -1027,6 +1036,15 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
                       {log.tableNumber ? `🍽️ Table ${log.tableNumber}` : '👥 Walk-in'}
                     </span>
                     <div className="flex gap-2">
+                      {logStatus === 'preparing' && (
+                        <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded font-semibold animate-pulse">🔥 PREPARING</span>
+                      )}
+                      {logStatus === 'done' && (
+                        <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded font-semibold">✓ DONE</span>
+                      )}
+                      {logStatus === 'cancelled' && (
+                        <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded font-semibold">🚫 CANCELLED</span>
+                      )}
                       <span className="text-xs bg-orange-600 text-white px-2 py-0.5 rounded font-semibold">
                         KOT #{log.kotCount || 1}
                       </span>
@@ -1045,7 +1063,8 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
                     ))}
                   </div>
                 </div>
-              ))
+                )
+              })
             )}
           </div>
         </div>

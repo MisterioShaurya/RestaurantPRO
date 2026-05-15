@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     
     if (!restaurantId) {
       return NextResponse.json(
-        { stats: { totalOrders: 0, totalRevenue: 0, activeOrders: 0, tableOccupancy: 0 }, recentOrders: [] },
+        { stats: { totalOrders: 0, totalRevenue: 0, activeOrders: 0, tableOccupancy: 0, todayOrdersCount: 0 }, recentOrders: [] },
         { status: 200 }
       )
     }
@@ -25,26 +25,57 @@ export async function GET(req: Request) {
       totalRevenue: 0,
       activeOrders: 0,
       tableOccupancy: 0,
+      todayOrdersCount: 0,
     }
 
     try {
       const client = await getMongoClient()
       const db = client.db('restaurant_pos')
 
-      // Get total orders FOR THIS RESTAURANT ONLY
-      const orders = await db.collection('orders').find({ restaurantId }).toArray()
-      const statsCollection = await db
-        .collection('stats')
-        .findOne({ type: 'daily', restaurantId })
+      // Get today's start and end (midnight to midnight) as ISO strings
+      const now = new Date()
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
 
-      stats.totalOrders = orders.length
-      stats.activeOrders = orders.filter((o: any) => o.status !== 'completed').length
-      stats.totalRevenue = statsCollection?.totalRevenue || orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0)
+      // Use parallel queries with MongoDB aggregation for optimal performance
+      const [totalOrders, activeOrdersCount, todayAgg, allTables] = await Promise.all([
+        // Total orders count (lightweight - just count) - keeping for reference
+        db.collection('orders').countDocuments({ restaurantId }),
+        
+        // Active orders count (non-completed)
+        db.collection('orders').countDocuments({ restaurantId, status: { $ne: 'completed' } }),
+        
+        // Today's orders - count + total revenue in one aggregation
+        db.collection('orders').aggregate([
+          { 
+            $match: { 
+              restaurantId,
+              createdAt: { 
+                $gte: startOfDay.toISOString(),
+                $lte: endOfDay.toISOString()
+              }
+            }
+          },
+          { 
+            $group: { 
+              _id: null, 
+              count: { $sum: 1 },
+              totalRevenue: { $sum: '$total' } 
+            } 
+          }
+        ]).toArray(),
+        
+        // Tables for occupancy
+        db.collection('tables').find({ restaurantId }).toArray()
+      ])
 
-      // Calculate occupancy FOR THIS RESTAURANT ONLY
-      const tables = await db.collection('tables').find({ restaurantId }).toArray()
-      const occupiedTables = tables.filter((t: any) => t.status === 'occupied').length
-      stats.tableOccupancy = tables.length > 0 ? Math.round((occupiedTables / tables.length) * 100) : 0
+      // Use today's data
+      stats.todayOrdersCount = todayAgg.length > 0 ? (todayAgg[0] as any).count || 0 : 0
+      stats.totalRevenue = todayAgg.length > 0 ? (todayAgg[0] as any).totalRevenue || 0 : 0
+      stats.totalOrders = totalOrders
+      stats.activeOrders = activeOrdersCount
+      const occupiedTables = allTables.filter((t: any) => t.status === 'occupied').length
+      stats.tableOccupancy = allTables.length > 0 ? Math.round((occupiedTables / allTables.length) * 100) : 0
     } catch (dbErr) {
       console.log('[Combined] Database error, using JSON fallback:', dbErr)
       const statsPath = join(dataDir, 'dashboard-stats.json')
@@ -123,6 +154,7 @@ export async function GET(req: Request) {
           totalRevenue: 0,
           activeOrders: 0,
           tableOccupancy: 0,
+          todayOrdersCount: 0,
         },
         recentOrders: [],
       },

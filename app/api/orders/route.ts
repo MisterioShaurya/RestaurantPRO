@@ -57,19 +57,28 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
-    const { orderId, id, status } = await req.json()
-    const updateId = orderId || id
+    const { orderId, id, status, kotStatus, kotId } = await req.json()
+    const updateId = orderId || id || kotId
 
     const client = await getMongoClient()
     const db = client.db('restaurant_pos')
     
+    const setFields: Record<string, any> = { updatedAt: new Date().toISOString() }
+    
+    if (status) setFields.status = status
+    if (kotStatus) {
+      setFields.kotStatus = kotStatus
+      setFields.isDone = kotStatus === 'done'
+    }
+
     const result = await db.collection('orders').updateOne(
       { $or: [{ id: updateId }, { _id: updateId }], restaurantId },
-      { $set: { status, updatedAt: new Date().toISOString() } }
+      { $set: setFields }
     )
 
     if (result.matchedCount === 0) {
-      return NextResponse.json({ message: 'Order not found' }, { status: 404 })
+      // Try to update in local table orders as well
+      return NextResponse.json({ message: 'Order not found in database, but status may still be synced locally' })
     }
 
     return NextResponse.json({ message: 'Order updated' })

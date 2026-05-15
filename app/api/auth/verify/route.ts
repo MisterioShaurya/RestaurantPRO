@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: 'User not found or inactive' }, { status: 401 })
     }
 
+    // Force isAdmin to true for primary account owners
     return NextResponse.json({
       user: {
         id: user._id.toString(),
@@ -42,7 +43,9 @@ export async function GET(req: NextRequest) {
         email: user.email,
         name: user.name,
         restaurantName: user.restaurantName,
-        restaurantId: user._id.toString()
+        restaurantId: user._id.toString(),
+        isAdmin: true,
+        role: 'admin'
       }
     })
 

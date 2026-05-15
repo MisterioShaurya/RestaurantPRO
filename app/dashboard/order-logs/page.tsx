@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChefHat, Printer } from 'lucide-react'
+import { ChefHat, Printer, Check } from 'lucide-react'
 
 interface OrderItem {
   _id: string
@@ -27,6 +27,7 @@ interface Order {
   paymentMode?: string
   subtotal?: number
   total?: number
+  kotStatus?: 'pending' | 'preparing' | 'done' | 'cancelled'
 }
 
 export default function OrderLogsPage() {
@@ -35,12 +36,21 @@ export default function OrderLogsPage() {
   const [loading, setLoading] = useState(true)
   const [filterTable, setFilterTable] = useState<number | string>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [userRole, setUserRole] = useState<string>('admin')
+  const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Get user role on mount
   useEffect(() => {
-    fetchOrders()
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr)
+        setUserRole(user.role || 'admin')
+      } catch {}
+    }
   }, [])
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       const res = await fetch('/api/orders')
       if (res.ok) {
@@ -56,6 +66,7 @@ export default function OrderLogsPage() {
           timestamp: o.createdAt || o.timestamp || new Date().toISOString(),
           kotCount: o.kotCount || 1,
           isDone: o.isDone || false,
+          kotStatus: o.kotStatus || (o.isDone ? 'done' : ( o as any).status === 'cancelled' ? 'cancelled' : ( o as any).status === 'preparing' ? 'preparing' : 'pending'),
         }))
         setOrders(fetchedOrders)
         setLoading(false)
@@ -75,12 +86,21 @@ export default function OrderLogsPage() {
       console.error('Error loading from localStorage:', err)
     }
     setLoading(false)
-  }
+  }, [])
+
+  // Poll for updates every 3 seconds for real-time sync
+  useEffect(() => {
+    fetchOrders()
+    pollingRef.current = setInterval(fetchOrders, 3000)
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current)
+    }
+  }, [fetchOrders])
 
   const filteredOrders = orders.filter(order => {
     const matchTable = filterTable === 'all' ? true
       : filterTable === 'walk-in' ? order.tableNumber === null || order.tableNumber === undefined
-      : order.tableNumber === parseInt(filterTable as string)
+      : order.tableNumber === Number(filterTable)
     
     const matchSearch = searchTerm === '' ? true
       : order.items?.some(item => item.name?.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -89,28 +109,56 @@ export default function OrderLogsPage() {
   })
 
   const isOrderCancelled = (order: Order) => 
-    order.status === 'cancelled' || order.items?.some(item => item._id === 'cancelled')
+    order.status === 'cancelled' || order.items?.some(item => item._id === 'cancelled') || order.kotStatus === 'cancelled'
 
   const getCancelledItems = (order: Order) =>
     order.items?.filter(item => item._id !== 'cancelled') || []
 
-  const toggleOrderDone = (orderId: string) => {
+  const updateKotStatus = async (orderId: string, newStatus: 'preparing' | 'done') => {
+    // Optimistically update local state
     setOrders(logs =>
       logs.map(order =>
-        order.id === orderId ? { ...order, isDone: !order.isDone } : order
+        order.id === orderId ? { ...order, kotStatus: newStatus, isDone: newStatus === 'done' } : order
       )
     )
+
+    // Sync to localStorage
     const updated = orders.map(order =>
-      order.id === orderId ? { ...order, isDone: !order.isDone } : order
+      order.id === orderId ? { ...order, kotStatus: newStatus, isDone: newStatus === 'done' } : order
     )
     localStorage.setItem('kotLogs', JSON.stringify(updated))
+
+    // Sync to backend API
+    try {
+      await fetch('/api/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kotId: orderId,
+          orderId: orderId,
+          id: orderId,
+          status: newStatus === 'done' ? 'done' : 'preparing',
+          kotStatus: newStatus,
+        })
+      })
+    } catch (err) {
+      console.error('Failed to update KOT status:', err)
+    }
+  }
+
+  const handlePreparing = (orderId: string) => {
+    updateKotStatus(orderId, 'preparing')
+  }
+
+  const handleDone = (orderId: string) => {
+    updateKotStatus(orderId, 'done')
   }
 
   const uniqueTables = [...new Set(orders
     .filter(order => order.tableNumber !== null && order.tableNumber !== undefined)
     .map(order => order.tableNumber)
     .sort((a, b) => (a || 0) - (b || 0))
-  )]
+  )] as number[]
 
   const getPaymentModeIcon = (mode?: string) => {
     switch (mode) {
@@ -118,7 +166,7 @@ export default function OrderLogsPage() {
       case 'card': return '💳 Card';
       case 'upi': return '📱 UPI';
       case 'split': return '🔀 Split';
-      default: return '—';
+      default: return '\u2014';
     }
   }
 
@@ -132,13 +180,17 @@ export default function OrderLogsPage() {
               onClick={() => router.back()}
               className="px-3 py-2 bg-slate-200 dark:bg-slate-700 rounded-md text-sm font-semibold text-slate-800 dark:text-white hover:bg-slate-300 dark:hover:bg-slate-600"
             >
-              ← Back
+              &larr; Back
             </button>
             <div className="flex items-center gap-3">
               <ChefHat size={32} className="text-orange-500" />
               <div>
-                <h1 className="text-4xl font-bold text-slate-900 dark:text-white">Order Logs</h1>
-                <p className="text-slate-600 dark:text-slate-300 mt-1">All orders with dates & payment modes</p>
+                <h1 className="text-4xl font-bold text-slate-900 dark:text-white">
+                  {userRole === 'chef' ? 'Kitchen Orders' : 'Order Logs'}
+                </h1>
+                <p className="text-slate-600 dark:text-slate-300 mt-1">
+                  {userRole === 'chef' ? 'Prepare orders and mark them as done' : 'All orders with dates & payment modes'}
+                </p>
               </div>
             </div>
           </div>
@@ -147,7 +199,7 @@ export default function OrderLogsPage() {
               onClick={fetchOrders}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition shadow-md"
             >
-              🔄 Refresh
+              &#x1F504; Refresh
             </button>
           </div>
         </div>
@@ -182,21 +234,21 @@ export default function OrderLogsPage() {
             <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{orders.length}</p>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-            <p className="text-sm text-slate-600 dark:text-slate-400 font-semibold">Table Orders</p>
-            <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-1">
-              {orders.filter(l => l.tableNumber !== null && l.tableNumber !== undefined).length}
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-semibold">Preparing</p>
+            <p className="text-3xl font-bold text-orange-600 dark:text-orange-400 mt-1">
+              {orders.filter(o => o.kotStatus === 'preparing').length}
             </p>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-            <p className="text-sm text-slate-600 dark:text-slate-400 font-semibold">Walk-in</p>
-            <p className="text-3xl font-bold text-cyan-600 dark:text-cyan-400 mt-1">
-              {orders.filter(l => l.tableNumber === null || l.tableNumber === undefined).length}
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-semibold">Done</p>
+            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              {orders.filter(o => o.kotStatus === 'done' || o.isDone).length}
             </p>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
             <p className="text-sm text-slate-600 dark:text-slate-400 font-semibold">Revenue</p>
             <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-              ₹{orders.reduce((sum, o) => sum + (o.total || 0), 0).toLocaleString()}
+              &#x20B9;{orders.reduce((sum, o) => sum + (o.total || 0), 0).toLocaleString()}
             </p>
           </div>
         </div>
@@ -207,7 +259,7 @@ export default function OrderLogsPage() {
             <div className="inline-block mb-4">
               <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-300 dark:border-slate-600 border-t-blue-600"></div>
             </div>
-            <p className="text-slate-600 dark:text-slate-400 text-lg">Loading order logs...</p>
+            <p className="text-slate-600 dark:text-slate-400 text-lg">Loading orders...</p>
           </div>
         )}
 
@@ -223,11 +275,16 @@ export default function OrderLogsPage() {
         {/* Orders */}
         {!loading && filteredOrders.length > 0 && (
           <div className="grid gap-4">
-            {filteredOrders.map((order) => (
+            {filteredOrders.map((order) => {
+              const cancelled = isOrderCancelled(order)
+              const kotStatus = order.kotStatus || (order.isDone ? 'done' : 'pending')
+              return (
               <div
                 key={order.id || order._id}
                 className={`border-2 rounded-lg p-6 transition ${
-                  isOrderCancelled(order)
+                  kotStatus === 'done'
+                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 dark:border-emerald-600'
+                    : cancelled
                     ? 'bg-red-50 dark:bg-red-900/20 border-red-400 dark:border-red-600'
                     : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:shadow-lg'
                 }`}
@@ -242,49 +299,87 @@ export default function OrderLogsPage() {
                       <span className="text-xs bg-orange-600 dark:bg-orange-700 text-white px-3 py-1.5 rounded-full font-bold">
                         KOT #{order.kotCount || 1}
                       </span>
-                      {isOrderCancelled(order) && (
-                        <span className="text-xs bg-red-600 dark:bg-red-700 text-white px-3 py-1.5 rounded-full font-bold">🚫 CANCELLED</span>
+                      {cancelled && (
+                        <span className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-full font-bold">&#x1F6AB; CANCELLED</span>
                       )}
-                      {order.isDone && (
-                        <span className="text-xs bg-emerald-600 dark:bg-emerald-700 text-white px-3 py-1.5 rounded-full font-bold">✓ PREPARED</span>
+                      {kotStatus === 'preparing' && !cancelled && (
+                        <span className="text-xs bg-orange-500 text-white px-3 py-1.5 rounded-full font-bold animate-pulse">&#x1F525; PREPARING</span>
+                      )}
+                      {kotStatus === 'done' && (
+                        <span className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-full font-bold">&#x2713; DONE</span>
                       )}
                     </div>
                     {/* Date & Payment Mode Row */}
                     <div className="flex flex-wrap gap-4 text-sm">
                       <p className="text-slate-500 dark:text-slate-400">
-                        📅 {new Date(order.timestamp || order.createdAt).toLocaleDateString('en-IN', {
+                        &#x1F4C5; {new Date(order.timestamp || order.createdAt).toLocaleDateString('en-IN', {
                           day: '2-digit', month: 'short', year: 'numeric',
                           hour: '2-digit', minute: '2-digit'
                         })}
                       </p>
                       {order.paymentMode && (
                         <p className="font-semibold text-slate-600 dark:text-slate-300">
-                          💳 {getPaymentModeIcon(order.paymentMode)}
+                          &#x1F4B3; {getPaymentModeIcon(order.paymentMode)}
                         </p>
                       )}
                       {order.total !== undefined && order.total > 0 && (
-                        <p className="font-bold text-emerald-600">₹{order.total.toLocaleString()}</p>
+                        <p className="font-bold text-emerald-600">&#x20B9;{order.total.toLocaleString()}</p>
                       )}
                     </div>
                   </div>
+
+                  {/* Chef Action Buttons - Preparing / Done */}
                   <div className="ml-4 flex items-center gap-2">
-                    <button
-                      onClick={() => toggleOrderDone(order.id || order._id)}
-                      className={`px-4 py-2 rounded-lg font-semibold transition text-sm ${
-                        order.isDone
-                          ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
-                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      }`}
-                    >
-                      {order.isDone ? '✓ Done' : 'Mark Done'}
-                    </button>
+                    {cancelled ? (
+                      <button
+                        onClick={() => handleDone(order.id || order._id)}
+                        className={`px-4 py-2 rounded-lg font-semibold transition text-sm ${
+                          kotStatus === 'done'
+                            ? 'bg-emerald-600 text-white shadow-lg'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1">
+                          <Check size={16} />
+                          {kotStatus === 'done' ? 'Done' : 'Mark Done'}
+                        </span>
+                      </button>
+                    ) : (
+                      <>
+                        {kotStatus === 'pending' && (
+                          <button
+                            onClick={() => handlePreparing(order.id || order._id)}
+                            className="px-4 py-2 rounded-lg font-semibold transition text-sm bg-orange-500 hover:bg-orange-600 text-white shadow-md"
+                          >
+                            &#x1F525; Preparing
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDone(order.id || order._id)}
+                          className={`px-4 py-2 rounded-lg font-semibold transition text-sm ${
+                            kotStatus === 'done'
+                              ? 'bg-emerald-600 text-white shadow-lg ring-2 ring-emerald-300'
+                              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1">
+                            <Check size={16} />
+                            {kotStatus === 'done' ? 'Done' : 'Done'}
+                          </span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 {/* Items */}
-                <div className={`rounded-lg p-4 mb-4 ${isOrderCancelled(order) ? 'bg-red-100 dark:bg-red-900/30' : 'bg-slate-50 dark:bg-slate-900/50'}`}>
-                  {isOrderCancelled(order) && (
-                    <div className="text-red-700 dark:text-red-400 font-bold mb-3 text-center text-lg">⚠️ ORDER CANCELLED</div>
+                <div className={`rounded-lg p-4 mb-4 ${
+                  kotStatus === 'done' ? 'bg-emerald-100 dark:bg-emerald-900/30' :
+                  cancelled ? 'bg-red-100 dark:bg-red-900/30' : 
+                  'bg-slate-50 dark:bg-slate-900/50'
+                }`}>
+                  {cancelled && (
+                    <div className="text-red-700 dark:text-red-400 font-bold mb-3 text-center text-lg">&#x26A0;&#xFE0F; ORDER CANCELLED</div>
                   )}
                   {(getCancelledItems(order)?.length || 0) > 0 && (
                     <div className="space-y-2">
@@ -295,7 +390,7 @@ export default function OrderLogsPage() {
                             <span className="text-sm text-slate-600 dark:text-slate-400">x{item.qty}</span>
                             {item.price > 0 && (
                               <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                                ₹{(item.price * item.qty).toFixed(2)}
+                                &#x20B9;{(item.price * item.qty).toFixed(2)}
                               </span>
                             )}
                           </div>
@@ -303,13 +398,13 @@ export default function OrderLogsPage() {
                       ))}
                     </div>
                   )}
-                  {!isOrderCancelled(order) && (!order.items || order.items.length === 0) && (
+                  {!cancelled && (!order.items || order.items.length === 0) && (
                     <p className="text-slate-500 dark:text-slate-400 text-sm text-center py-4">No items</p>
                   )}
                 </div>
 
                 {/* Summary */}
-                {getCancelledItems(order).length > 0 && !isOrderCancelled(order) && (
+                {getCancelledItems(order).length > 0 && !cancelled && (
                   <div className="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-900 rounded-lg text-sm">
                     <span className="font-semibold text-slate-900 dark:text-white">Total Items:</span>
                     <span className="font-bold text-lg text-slate-900 dark:text-white">
@@ -318,7 +413,8 @@ export default function OrderLogsPage() {
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

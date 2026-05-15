@@ -1,0 +1,10 @@
+{
+  "name": "RestaurantPRO",
+  "short_name": "RestaurantPRO",
+  "description": "Professional restaurant management system with POS, inventory, and analytics",
+  "start_url": "/login",
+  "display": "standalone",
+  "background_color": "#0a0e27",
+  "theme_color": "#0a0e27",
+  "icons": []
+}

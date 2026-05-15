@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       name: username,
       restaurantName,
       isActive: true,
-      isAdmin: false,
+      isAdmin: true,
       isFirstLogin: true,
       tablesCount: 12,
       createdAt: new Date(),
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
       username,
       restaurantName,
       restaurantId: result.insertedId.toString(),
-      isAdmin: false
+      isAdmin: true
     }, JWT_SECRET, { expiresIn: '24h' })
 
     const response = NextResponse.json({
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
         username,
         email,
         restaurantName,
-        isAdmin: false,
+        isAdmin: true,
         isFirstLogin: true,
         tablesCount: 12
       },

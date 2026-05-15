@@ -37,9 +37,23 @@ export default function SideNav({ isOpen, onToggle }: SideNavProps) {
     { label: 'Expenses', href: '/dashboard/expenses', icon: '💸', color: 'red' },
     { label: 'Reservations', href: '/dashboard/reservations', icon: '📅', color: 'rose' },
     { label: 'KOT Logs', href: '/dashboard/order-logs', icon: '🧾', color: 'teal' },
+    { label: 'Role Management', href: '/dashboard/role-management', icon: '🔐', color: 'purple' },
     { label: 'Analytics', href: '/dashboard/analytics', icon: '📈', color: 'lime' },
     { label: 'Integrations', href: '/dashboard/integrations', icon: '🔌', color: 'purple' },
     { label: 'Contact Us', href: '/dashboard/contact', icon: '📞', color: 'blue' },
+  ]
+
+  // Cashier menu
+  const cashierMenu = [
+    { label: 'Dashboard', href: '/dashboard', icon: '📊', color: 'blue' },
+    { label: 'Tables', href: '/dashboard/tables', icon: '🍽️', color: 'orange' },
+    { label: 'Manage Tables', href: '/dashboard/manage-tables', icon: '⚙️', color: 'slate' },
+    { label: 'Menu Items', href: '/dashboard/menu', icon: '📜', color: 'amber' },
+    { label: 'Orders', href: '/dashboard/orders', icon: '📋', color: 'cyan' },
+    { label: 'Inventory', href: '/dashboard/inventory', icon: '📦', color: 'pink' },
+    { label: 'Reservations', href: '/dashboard/reservations', icon: '📅', color: 'rose' },
+    { label: 'KOT Logs', href: '/dashboard/order-logs', icon: '🧾', color: 'teal' },
+    { label: 'Integrations', href: '/dashboard/integrations', icon: '🔌', color: 'purple' },
   ]
 
   // Counter/Waiter menu
@@ -53,14 +67,15 @@ export default function SideNav({ isOpen, onToggle }: SideNavProps) {
     { label: 'Contact Us', href: '/dashboard/contact', icon: '📞', color: 'blue' },
   ]
 
-  // Chef menu
+  // Chef menu - KOT Logs only + Contact Us
   const chefMenu = [
-    { label: 'Orders', href: '/dashboard/orders', icon: '📋', color: 'cyan' },
     { label: 'KOT Logs', href: '/dashboard/order-logs', icon: '🧾', color: 'teal' },
+    { label: 'Contact Us', href: '/dashboard/contact', icon: '📞', color: 'blue' },
   ]
 
   const getMenuItems = () => {
     if (userRole === 'chef') return chefMenu
+    if (userRole === 'cashier') return cashierMenu
     if (userRole === 'waiter' || userRole === 'manager') return counterMenu
     return adminMenu
   }
