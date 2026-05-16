@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Subscription } from '@/lib/types'
 import { persistentUserStorage } from '@/lib/persistent-user-storage'
+import MobileDrawer from '@/components/dashboard/drawer'
 
 export default function DashboardLayout({
   children,
@@ -15,9 +16,18 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [isOfflineUser, setIsOfflineUser] = useState(false)
+  const [user, setUser] = useState<{ role?: string; name?: string } | null>(null)
 
   useEffect(() => {
     checkSubscription()
+    // Load user info for mobile drawer
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      try {
+        const parsed = JSON.parse(userStr)
+        setUser({ role: parsed.role, name: parsed.name || parsed.username })
+      } catch {}
+    }
   }, [])
 
   const checkSubscription = async () => {
@@ -141,8 +151,24 @@ export default function DashboardLayout({
     )
   }
 
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    localStorage.removeItem('currentUser')
+    document.cookie = 'token=; path=/; max-age=0'
+    document.cookie = 'userRole=; path=/; max-age=0'
+    router.push('/login')
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Mobile Drawer - only visible on < 1024px */}
+      <MobileDrawer 
+        userRole={user?.role || 'admin'} 
+        isChef={user?.role === 'chef'}
+        onLogout={user?.role === 'chef' ? handleLogout : undefined}
+      />
+      
       {/* Main Content */}
       <div className="flex-1">
         {children}

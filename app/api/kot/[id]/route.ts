@@ -14,60 +14,60 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const client = await getMongoClient()
     const db = client.db('restaurant_pos')
 
-    const updateFields: Record<string, any> = { 
-      updatedAt: new Date().toISOString() 
-    }
-
-    if (kotStatus) {
-      updateFields.kotStatus = kotStatus
-      updateFields.isDone = kotStatus === 'done'
-    } else if (status) {
-      updateFields.status = status
-      // Derive kotStatus from status for backward compatibility
-      if (status === 'ready' || status === 'completed') {
-        updateFields.kotStatus = 'done'
-        updateFields.isDone = true
-      } else if (status === 'preparing') {
-        updateFields.kotStatus = 'preparing'
-      } else if (status === 'cancelled') {
-        updateFields.kotStatus = 'cancelled'
+    // Determine the final status value
+    const finalStatus = kotStatus || status || 'active'
+    
+    // Map legacy statuses to proper enum values
+    const mappedStatus = (() => {
+      switch (finalStatus) {
+        case 'pending':
+        case 'active':
+          return 'active'
+        case 'preparing':
+          return 'preparing'
+        case 'done':
+        case 'completed':
+        case 'ready':
+          return 'done'
+        case 'cancelled':
+          return 'cancelled'
+        default:
+          return finalStatus
       }
+    })()
+
+    const updateFields: Record<string, any> = { 
+      status: mappedStatus,
+      updatedAt: new Date().toISOString()
     }
 
     const id = params.id
     let result: any = null
 
-    // Try ObjectId format
+    // Try ObjectId format - update ONE document only
     try {
-      result = await db.collection('kots').updateOne(
+      result = await db.collection('kots').findOneAndUpdate(
         { _id: new ObjectId(id), restaurantId },
-        { $set: updateFields }
+        { $set: updateFields },
+        { returnDocument: 'after' }
       )
     } catch {
       // ignore
     }
 
-    if (!result || result.matchedCount === 0) {
-      result = await db.collection('kots').updateOne(
+    if (!result) {
+      // Fallback: try matching by string id field
+      result = await db.collection('kots').findOneAndUpdate(
         { id, restaurantId },
-        { $set: updateFields }
+        { $set: updateFields },
+        { returnDocument: 'after' }
       )
-    }
-
-    // Also update the orders collection with matching kot id or kotId field
-    try {
-      await db.collection('orders').updateMany(
-        { $or: [{ id }, { _id: id }, { kotId: id }], restaurantId },
-        { $set: updateFields }
-      )
-    } catch {
-      // ignore
     }
 
     return NextResponse.json({ 
       success: true,
-      updated: result ? result.modifiedCount > 0 : false,
-      matched: result ? result.matchedCount : 0
+      updated: !!result,
+      kot: result ? { ...result, _id: result._id?.toString() } : null
     })
   } catch (error) {
     console.error('[KOT PATCH] Error:', error)
