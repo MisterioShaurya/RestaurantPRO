@@ -1,80 +1,109 @@
+// Service Worker for RestaurantPRO - Push Notifications
+
 const CACHE_NAME = 'restaurant-pro-v1';
 
-// Install event - cache static assets
 self.addEventListener('install', (event) => {
+  console.log('[SW] Installing service worker...');
   self.skipWaiting();
-  console.log('[SW] Service Worker installed');
 });
 
-// Activate event - clean old caches
 self.addEventListener('activate', (event) => {
+  console.log('[SW] Activating service worker...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+    caches.keys().then((keyList) => {
       return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
+        keyList.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
       );
     })
   );
-  console.log('[SW] Service Worker activated');
-  return self.clients.claim();
+  self.clients.claim();
 });
 
-// Push event - show notification for new KOTs
+// Handle push notifications
 self.addEventListener('push', (event) => {
   console.log('[SW] Push received:', event);
 
-  let data = {};
-  try {
-    data = event.data ? event.data.json() : {};
-  } catch (e) {
-    console.error('[SW] Error parsing push data:', e);
-    data = { title: 'New Order', body: 'A new order has been placed' };
+  let notificationData = {
+    title: 'RestaurantPRO',
+    body: 'New update available',
+    url: '/dashboard/order-logs'
+  };
+
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      notificationData = {
+        title: payload.title || 'RestaurantPRO',
+        body: payload.body || '',
+        url: payload.url || '/dashboard/order-logs',
+        orderId: payload.orderId
+      };
+    } catch (e) {
+      console.error('[SW] Error parsing push data:', e);
+    }
   }
 
-  const title = data.title || '🍽️ New KOT Order';
   const options = {
-    body: data.body || 'A new order has been sent to the kitchen',
-    icon: '/icon.png',
-    badge: '/badge.png',
+    body: notificationData.body,
+    icon: '/favicon.ico',
+    badge: '/favicon.ico',
     vibrate: [200, 100, 200],
     data: {
-      url: data.url || '/dashboard/order-logs',
-      orderId: data.orderId || null,
+      url: notificationData.url,
+      orderId: notificationData.orderId,
+      timestamp: Date.now()
     },
     actions: [
-      { action: 'view', title: 'View Orders' },
-      { action: 'dismiss', title: 'Dismiss' },
+      {
+        action: 'open',
+        title: 'View Order',
+      },
+      {
+        action: 'dismiss',
+        title: 'Dismiss',
+      }
     ],
-    tag: 'new-kot',
+    tag: `kot-${notificationData.orderId || Date.now()}`,
     renotify: true,
+    requireInteraction: true,
   };
 
   event.waitUntil(
-    self.registration.showNotification(title, options)
+    self.registration.showNotification(notificationData.title, options)
   );
 });
 
-// Notification click event
+// Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
+  console.log('[SW] Notification clicked:', event);
+
   event.notification.close();
 
   if (event.action === 'dismiss') {
     return;
   }
 
+  // Open the order logs page
   const urlToOpen = event.notification.data?.url || '/dashboard/order-logs';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // Check if there is already a window/tab open with the target URL
-      for (const client of windowClients) {
-        if (client.url.includes(urlToOpen) && 'focus' in client) {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Check if there's already a window/tab open with the target URL
+      for (let i = 0; i < clientList.length; i++) {
+        const client = clientList[i];
+        if (client.url.includes('/dashboard') && 'focus' in client) {
+          client.postMessage({
+            type: 'NAVIGATE',
+            url: urlToOpen
+          });
           return client.focus();
         }
       }
-      // If not, open a new window/tab
+      // If no window/tab found, open a new one
       if (clients.openWindow) {
         return clients.openWindow(urlToOpen);
       }
@@ -82,26 +111,46 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
-// Fetch event - network first, fallback to cache
-self.addEventListener('fetch', (event) => {
-  // Only handle GET requests
-  if (event.request.method !== 'GET') return;
+// Handle background sync for offline orders
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-orders') {
+    console.log('[SW] Syncing pending orders...');
+    event.waitUntil(syncPendingOrders());
+  }
+});
 
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Cache successful responses
-        if (response.status === 200) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
+async function syncPendingOrders() {
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const pendingOrders = await cache.match('/api/orders/pending');
+    
+    if (pendingOrders) {
+      const orders = await pendingOrders.json();
+      for (const order of orders) {
+        try {
+          const response = await fetch('/api/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(order)
           });
+          if (response.ok) {
+            await cache.delete('/api/orders/pending');
+          }
+        } catch (err) {
+          console.error('[SW] Error syncing order:', err);
         }
-        return response;
-      })
-      .catch(() => {
-        // Fallback to cache
-        return caches.match(event.request);
-      })
-  );
+      }
+    }
+  } catch (err) {
+    console.error('[SW] Error in syncPendingOrders:', err);
+  }
+}
+
+// Listen for messages from the client
+self.addEventListener('message', (event) => {
+  console.log('[SW] Message received:', event.data);
+  
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

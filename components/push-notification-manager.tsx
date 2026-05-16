@@ -7,6 +7,7 @@ export function PushNotificationManager() {
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     // Check if push notifications are supported
@@ -55,6 +56,7 @@ export function PushNotificationManager() {
   const subscribe = async () => {
     if (!isSupported) return
     setIsLoading(true)
+    setError(null)
 
     try {
       const registration = await navigator.serviceWorker.ready
@@ -65,8 +67,8 @@ export function PushNotificationManager() {
       const vapidPublicKey = keyData.publicKey
 
       if (!vapidPublicKey) {
-        console.warn('[PushNotification] No VAPID key configured, using fallback')
-        alert('Push notifications require server configuration. Contact administrator.')
+        // VAPID keys not configured - fall back to in-app notification bell
+        setError('Push not configured - using in-app notifications')
         setIsLoading(false)
         return
       }
@@ -89,11 +91,17 @@ export function PushNotificationManager() {
 
       if (response.ok) {
         setIsSubscribed(true)
+        console.log('[PushNotification] Successfully subscribed to push notifications')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[PushNotification] Error subscribing:', error)
-      // Fallback: still mark as subscribed locally
-      setIsSubscribed(true)
+      // If permission denied or not granted, handle silently
+      if (Notification.permission === 'denied') {
+        setError('Notifications blocked - please enable in browser settings')
+      } else {
+        // Graceful fallback
+        setError('Using in-app notifications')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -144,19 +152,34 @@ export function PushNotificationManager() {
     }
   }, [])
 
-  // Auto-subscribe for chef users
+  // Auto-subscribe for chef users - request permission and subscribe
   useEffect(() => {
     if (isSupported && userRole === 'chef' && !isSubscribed && !isLoading) {
-      const timer = setTimeout(() => {
-        subscribe()
-      }, 3000)
+      // On chef login: request notification permission
+      const requestPermission = async () => {
+        if (Notification.permission === 'default') {
+          const permission = await Notification.requestPermission()
+          if (permission === 'granted') {
+            // Permission granted, subscribe after a short delay
+            setTimeout(() => subscribe(), 2000)
+          } else {
+            setError('Notifications permission not granted')
+          }
+        } else if (Notification.permission === 'granted') {
+          // Already granted, subscribe silently
+          const timer = setTimeout(() => {
+            subscribe()
+          }, 3000)
+          return () => clearTimeout(timer)
+        }
+      }
+
+      const timer = setTimeout(requestPermission, 1000)
       return () => clearTimeout(timer)
     }
   }, [isSupported, userRole, isSubscribed, isLoading])
 
-  if (!isSupported || userRole !== 'chef') {
-    return null
-  }
-
-  return null // Invisible component - handles notifications silently
+  // This component is invisible - it just handles subscription logic silently
+  // and does NOT show the "server configuration" alert error
+  return null
 }

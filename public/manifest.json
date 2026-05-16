@@ -1,10 +1,18 @@
 {
   "name": "RestaurantPRO",
   "short_name": "RestaurantPRO",
-  "description": "Professional restaurant management system with POS, inventory, and analytics",
-  "start_url": "/login",
+  "description": "Restaurant Management System with KOT and role-based access",
+  "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#0a0e27",
-  "theme_color": "#0a0e27",
-  "icons": []
+  "background_color": "#ffffff",
+  "theme_color": "#7B5FA8",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ],
+  "gcm_sender_id": "103953800507",
+  "gcm_user_visible_only": true
 }

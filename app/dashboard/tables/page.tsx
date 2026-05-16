@@ -76,6 +76,7 @@ export default function TablesPage() {
   const [customerName, setCustomerName] = useState<string>('')
   const [customerPhone, setCustomerPhone] = useState<string>('')
   const [kotPrintContent, setKotPrintContent] = useState<{ items: OrderItem[]; table: string } | null>(null)
+  const [kotRemark, setKotRemark] = useState<string>('')
   
   // Resizable section widths (modal only)
   const [menuWidth, setMenuWidth] = useState(50)  // percentage of modal
@@ -98,6 +99,9 @@ export default function TablesPage() {
   useEffect(() => {
     loadLocalTables()
     loadLocalMenu()
+    fetchKOTLogs()
+    const interval = setInterval(fetchKOTLogs, 3000)
+    return () => clearInterval(interval)
   }, [])
 
   // Keyboard shortcuts
@@ -137,12 +141,6 @@ export default function TablesPage() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showBillingModal, currentCart, currentOrderState])
-
-  // Load tables and menu on mount
-  useEffect(() => {
-    loadLocalTables()
-    loadLocalMenu()
-  }, [])
 
   const handleModalDividerMouseDown = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -207,6 +205,83 @@ export default function TablesPage() {
       alert('Failed to load menu. Please check your connection.')
       setMenuItems([])
       setCategories([])
+    }
+  }
+
+  // Fetch real-time KOT logs from the backend with live status
+  const fetchKOTLogs = async () => {
+    try {
+      const [ordersRes, kotsRes] = await Promise.all([
+        fetch('/api/orders').catch(() => null),
+        fetch('/api/kot').catch(() => null),
+      ])
+
+      const allLogs: KOTLog[] = []
+
+      if (ordersRes && ordersRes.ok) {
+        const data = await ordersRes.json()
+        const orders = Array.isArray(data.orders) ? data.orders : []
+        orders.forEach((o: any) => {
+          const status = o.kotStatus || o.status || 'pending'
+          if (status === 'completed') return // skip fully paid orders
+          allLogs.push({
+            id: o._id || o.id || `order-${Math.random()}`,
+            kotNumber: o.kotNumber || o.kotCount || 1,
+            tableNumber: o.tableNumber || null,
+            items: (o.items || []).map((item: any) => ({
+              _id: item._id || '',
+              name: item.name || '',
+              price: item.price || 0,
+              qty: item.quantity || item.qty || 1,
+            })),
+            timestamp: o.createdAt ? new Date(o.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '',
+            kotCount: o.kotCount || 1,
+            kotStatus: status === 'done' || status === 'completed' ? 'done' : status,
+          })
+        })
+      }
+
+      if (kotsRes && kotsRes.ok) {
+        const data = await kotsRes.json()
+        const kots = Array.isArray(data.kots) ? data.kots : []
+        kots.forEach((k: any) => {
+          allLogs.push({
+            id: k._id || k.id || `kot-${Math.random()}`,
+            kotNumber: k.kotNumber || k.kotCount || 1,
+            tableNumber: k.tableNumber || null,
+            items: (k.items || []).map((item: any) => ({
+              _id: item._id || '',
+              name: item.name || '',
+              price: item.price || 0,
+              qty: item.quantity || item.qty || 1,
+            })),
+            timestamp: k.createdAt ? new Date(k.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '',
+            kotCount: k.kotCount || 1,
+            kotStatus: k.kotStatus || k.status || 'pending',
+          })
+        })
+      }
+
+      // Deduplicate by id
+      const map = new Map<string, KOTLog>()
+      for (const log of allLogs) {
+        if (!map.has(log.id)) {
+          map.set(log.id, log)
+        }
+      }
+
+      const uniqueLogs = Array.from(map.values())
+        .sort((a, b) => {
+          // Show newest first
+          if (a.kotStatus === 'cancelled' && b.kotStatus !== 'cancelled') return -1
+          if (a.kotStatus !== 'cancelled' && b.kotStatus === 'cancelled') return 1
+          return (b.kotNumber || 0) - (a.kotNumber || 0)
+        })
+        .slice(0, 50)
+
+      setKotLogs(uniqueLogs)
+    } catch (err) {
+      console.error('[Tables] Error fetching KOT logs:', err)
     }
   }
 
@@ -1018,10 +1093,11 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
             ) : (
               kotLogs.map((log) => {
                 const logStatus = log.kotStatus || 'pending'
+                const isCancellable = logStatus === 'pending' || logStatus === 'preparing'
                 return (
                 <div
                   key={log.id}
-                  className={`border rounded-lg p-3 shadow-sm ${
+                  className={`group relative border rounded-lg p-3 shadow-sm ${
                     logStatus === 'done'
                       ? 'bg-emerald-50 border-emerald-300'
                       : logStatus === 'cancelled'
@@ -1031,6 +1107,24 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
                       : 'bg-orange-50 border-orange-200'
                   }`}
                 >
+                  {/* Cancel KOT Button on Hover */}
+                  {isCancellable && (
+                    <button
+                      onClick={() => {
+                        if (confirm('Are you sure you want to cancel this KOT?')) {
+                          setKotLogs(prev =>
+                            prev.map(l =>
+                              l.id === log.id ? { ...l, kotStatus: 'cancelled' as const } : l
+                            )
+                          )
+                        }
+                      }}
+                      className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition shadow-md z-10"
+                      title="Cancel KOT"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                   <div className="flex justify-between items-start mb-2">
                     <span className="font-semibold text-gray-900 text-sm">
                       {log.tableNumber ? `🍽️ Table ${log.tableNumber}` : '👥 Walk-in'}
@@ -1462,6 +1556,32 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
               </button>
             </div>
 
+            {/* KOT Remark Input */}
+            <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Remarks <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={kotRemark}
+                  onChange={(e) => setKotRemark(e.target.value)}
+                  placeholder="e.g. Less spicy, extra cheese..."
+                  className="flex-1 px-3 py-2 text-sm bg-white text-gray-900 rounded-lg border-2 border-gray-300 focus:border-orange-500 focus:outline-none placeholder-gray-400"
+                  maxLength={100}
+                />
+                {kotRemark && (
+                  <button
+                    onClick={() => setKotRemark('')}
+                    className="text-gray-500 hover:text-gray-700 px-2"
+                    title="Clear remark"
+                  >
+                    <X size={18} />
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* KOT Content - Printable */}
             <div className="p-6 bg-white text-gray-900">
               <div id="kotContent" className="text-xs font-mono leading-relaxed space-y-3">
@@ -1484,6 +1604,13 @@ Payment Mode: ${billData.paymentMode.toUpperCase()}
                     </div>
                   ))}
                 </div>
+
+                {kotRemark && (
+                  <div className="border-2 border-dashed border-orange-400 bg-orange-50 p-3 text-center">
+                    <span className="text-xs font-bold text-orange-700 uppercase">Remarks: </span>
+                    <span className="text-sm font-semibold text-orange-800">{kotRemark}</span>
+                  </div>
+                )}
 
                 <div className="text-center text-xs font-bold mt-3">
                   <div className="border-2 border-gray-900 inline-block px-6 py-3 bg-yellow-100">PLEASE PREPARE</div>

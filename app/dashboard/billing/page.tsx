@@ -222,14 +222,14 @@ export default function BillingPage() {
             </tr>
           </thead>
           <tbody>
-            ${cartItems.map((it) => `<tr><td>${it.name}</td><td>${it.quantity}</td><td>$${it.price.toFixed(2)}</td><td>$${it.total.toFixed(2)}</td></tr>`).join('')}
+            ${cartItems.map((it) => `<tr><td>${it.name}</td><td>${it.quantity}</td><td>₹${it.price.toFixed(2)}</td><td>₹${it.total.toFixed(2)}</td></tr>`).join('')}
           </tbody>
         </table>
         <div style="margin-top: 20px;">
-          <p><strong>Subtotal:</strong> $${subtotal.toFixed(2)}</p>
-          ${discount > 0 ? `<p><strong>Discount:</strong> -$${discount.toFixed(2)}</p>` : ''}
-          <p><strong>Tax:</strong> $${tax.toFixed(2)}</p>
-          <p class="total"><strong>TOTAL: $${total.toFixed(2)}</strong></p>
+          <p><strong>Subtotal:</strong> ₹${subtotal.toFixed(2)}</p>
+          ${discount > 0 ? `<p><strong>Discount:</strong> -₹${discount.toFixed(2)}</p>` : ''}
+          <p><strong>Tax:</strong> ₹${tax.toFixed(2)}</p>
+          <p class="total"><strong>TOTAL: ₹${total.toFixed(2)}</strong></p>
         </div>
       </body>
       </html>`
@@ -423,7 +423,7 @@ export default function BillingPage() {
                     className="bg-slate-50 dark:bg-slate-700 hover:bg-emerald-50 dark:hover:bg-slate-600 border-2 border-slate-300 dark:border-slate-600 hover:border-emerald-500 rounded-lg p-4 transition transform hover:scale-105 shadow-sm"
                   >
                     <p className="font-bold text-slate-900 dark:text-white text-sm">{item.name}</p>
-                    <p className="text-emerald-600 dark:text-emerald-400 font-bold text-lg mt-2">${Number(item.price).toFixed(2)}</p>
+                    <p className="text-emerald-600 dark:text-emerald-400 font-bold text-lg mt-2">₹{Number(item.price).toFixed(2)}</p>
                   </button>
                 ))
               )}
@@ -465,7 +465,7 @@ export default function BillingPage() {
                         </button>
                       </div>
                     </div>
-                    <p className="font-bold text-emerald-400 ml-2 text-sm">${item.total.toFixed(2)}</p>
+                    <p className="font-bold text-emerald-400 ml-2 text-sm">₹{item.total.toFixed(2)}</p>
                   </div>
                 ))
               )}
@@ -475,7 +475,7 @@ export default function BillingPage() {
             <div className="space-y-3 border-t border-slate-600 pt-4 mb-6 bg-slate-800/50 p-4 rounded-lg">
               <div className="flex justify-between text-sm text-slate-300">
                 <span>Subtotal:</span>
-                <span className="font-bold text-white">${subtotal.toFixed(2)}</span>
+                <span className="font-bold text-white">₹{subtotal.toFixed(2)}</span>
               </div>
 
               <div className="flex justify-between items-center text-sm text-slate-300">
@@ -493,7 +493,7 @@ export default function BillingPage() {
               {discount > 0 && (
                 <div className="flex justify-between text-sm text-red-400">
                   <span>Discount:</span>
-                  <span className="font-bold">−${discount.toFixed(2)}</span>
+                  <span className="font-bold">−₹{discount.toFixed(2)}</span>
                 </div>
               )}
 
@@ -511,7 +511,7 @@ export default function BillingPage() {
 
               <div className="flex justify-between text-sm text-slate-300">
                 <span>Tax:</span>
-                <span className="font-bold text-white">${tax.toFixed(2)}</span>
+                <span className="font-bold text-white">₹{tax.toFixed(2)}</span>
               </div>
 
               <div className="flex justify-between text-xl font-bold pt-2 border-t border-slate-600 text-white">
@@ -703,10 +703,10 @@ export default function BillingPage() {
                           <td className="px-4 py-3 text-sm font-semibold text-slate-900 dark:text-white">{item.name}</td>
                           <td className="px-4 py-3 text-center text-sm text-slate-700 dark:text-slate-300">{qty}</td>
                           <td className="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300">
-                            ${price.toFixed(2)}
+                            ₹{price.toFixed(2)}
                           </td>
                           <td className="px-4 py-3 text-right text-sm font-bold text-slate-900 dark:text-white">
-                            ${totalItem.toFixed(2)}
+                            ₹{totalItem.toFixed(2)}
                           </td>
                         </tr>
                       )
@@ -719,21 +719,21 @@ export default function BillingPage() {
               <div className="space-y-3 p-4 bg-slate-100 dark:bg-slate-900 rounded-lg border-2 border-slate-300 dark:border-slate-700">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-700 dark:text-slate-300">Subtotal:</span>
-                  <span className="font-bold text-slate-900 dark:text-white">${Number(selectedBill.subtotal || 0).toFixed(2)}</span>
+                  <span className="font-bold text-slate-900 dark:text-white">₹{Number(selectedBill.subtotal || 0).toFixed(2)}</span>
                 </div>
                 {Number(selectedBill.discount || 0) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-700 dark:text-slate-300">Discount:</span>
-                    <span className="font-bold text-red-600 dark:text-red-400">−${Number(selectedBill.discount || 0).toFixed(2)}</span>
+                    <span className="font-bold text-red-600 dark:text-red-400">−₹{Number(selectedBill.discount || 0).toFixed(2)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-700 dark:text-slate-300">Tax:</span>
-                  <span className="font-bold text-slate-900 dark:text-white">${Number(selectedBill.tax || 0).toFixed(2)}</span>
+                  <span className="font-bold text-slate-900 dark:text-white">₹{Number(selectedBill.tax || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold pt-3 border-t-2 border-slate-300 dark:border-slate-700">
                   <span className="text-slate-900 dark:text-white">Total:</span>
-                  <span className="text-emerald-600 dark:text-emerald-400">${Number(selectedBill.total || 0).toFixed(2)}</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">₹{Number(selectedBill.total || 0).toFixed(2)}</span>
                 </div>
               </div>
             </div>

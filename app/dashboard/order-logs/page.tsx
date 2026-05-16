@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChefHat, Printer, Check } from 'lucide-react'
+import { ChefHat } from 'lucide-react'
 
 interface OrderItem {
   _id: string
@@ -39,22 +39,33 @@ export default function OrderLogsPage() {
   const [userRole, setUserRole] = useState<string>('admin')
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Get user role on mount
+  // Get user role on mount and redirect chef to kitchen page
   useEffect(() => {
     const userStr = localStorage.getItem('user')
     if (userStr) {
       try {
         const user = JSON.parse(userStr)
         setUserRole(user.role || 'admin')
+        // Redirect chef users to the dedicated KOT kitchen page
+        if (user.role === 'chef') {
+          router.replace('/dashboard/kitchen')
+          return
+        }
       } catch {}
     }
-  }, [])
+  }, [router])
 
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await fetch('/api/orders')
-      if (res.ok) {
-        const data = await res.json()
+      const [ordersRes, kotsRes] = await Promise.all([
+        fetch('/api/orders').catch(() => null),
+        fetch('/api/kot').catch(() => null),
+      ])
+
+      let allOrders: Order[] = []
+
+      if (ordersRes && ordersRes.ok) {
+        const data = await ordersRes.json()
         const fetchedOrders = (data.orders || []).map((o: Order) => ({
           ...o,
           id: o._id || o.id,
@@ -65,37 +76,59 @@ export default function OrderLogsPage() {
           })),
           timestamp: o.createdAt || o.timestamp || new Date().toISOString(),
           kotCount: o.kotCount || 1,
-          isDone: o.isDone || false,
-          kotStatus: o.kotStatus || (o.isDone ? 'done' : ( o as any).status === 'cancelled' ? 'cancelled' : ( o as any).status === 'preparing' ? 'preparing' : 'pending'),
+          kotStatus: o.kotStatus || (o.isDone ? 'done' : o.status === 'cancelled' ? 'cancelled' : o.status === 'preparing' ? 'preparing' : o.status === 'completed' ? 'done' : 'pending'),
         }))
-        setOrders(fetchedOrders)
-        setLoading(false)
-        return
+        allOrders = [...allOrders, ...fetchedOrders]
       }
+
+      if (kotsRes && kotsRes.ok) {
+        const data = await kotsRes.json()
+        const kotsList = (data.kots || []).map((k: any) => ({
+          ...k,
+          id: k._id || k.id,
+          tableNumber: k.tableNumber || null,
+          items: (k.items || []).map((item: any) => ({
+            _id: item._id || '',
+            name: item.name || '',
+            price: item.price || 0,
+            qty: item.quantity || item.qty || 1,
+          })),
+          timestamp: k.createdAt || new Date().toISOString(),
+          kotStatus: k.kotStatus || k.status || 'pending',
+          kotCount: k.kotCount || 1,
+        }))
+        allOrders = [...allOrders, ...kotsList]
+      }
+
+      // Deduplicate
+      const map = new Map<string, Order>()
+      for (const o of allOrders) {
+        const key = o._id || o.id || Math.random().toString()
+        if (!map.has(key)) {
+          map.set(key, o)
+        }
+      }
+
+      const merged = Array.from(map.values())
+        .sort((a, b) => new Date(b.timestamp || b.createdAt || 0).getTime() - new Date(a.timestamp || a.createdAt || 0).getTime())
+
+      setOrders(merged)
+      setLoading(false)
     } catch (err) {
       console.log('API fetch failed:', err)
     }
     
-    // Fallback to localStorage
-    try {
-      const savedLogs = localStorage.getItem('kotLogs')
-      if (savedLogs) {
-        setOrders(JSON.parse(savedLogs))
-      }
-    } catch (err) {
-      console.error('Error loading from localStorage:', err)
-    }
     setLoading(false)
   }, [])
 
-  // Poll for updates every 3 seconds for real-time sync
   useEffect(() => {
+    if (userRole === 'chef') return // Don't fetch if chef (will redirect)
     fetchOrders()
     pollingRef.current = setInterval(fetchOrders, 3000)
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current)
     }
-  }, [fetchOrders])
+  }, [fetchOrders, userRole])
 
   const filteredOrders = orders.filter(order => {
     const matchTable = filterTable === 'all' ? true
@@ -109,50 +142,10 @@ export default function OrderLogsPage() {
   })
 
   const isOrderCancelled = (order: Order) => 
-    order.status === 'cancelled' || order.items?.some(item => item._id === 'cancelled') || order.kotStatus === 'cancelled'
+    order.status === 'cancelled' || order.kotStatus === 'cancelled'
 
   const getCancelledItems = (order: Order) =>
     order.items?.filter(item => item._id !== 'cancelled') || []
-
-  const updateKotStatus = async (orderId: string, newStatus: 'preparing' | 'done') => {
-    // Optimistically update local state
-    setOrders(logs =>
-      logs.map(order =>
-        order.id === orderId ? { ...order, kotStatus: newStatus, isDone: newStatus === 'done' } : order
-      )
-    )
-
-    // Sync to localStorage
-    const updated = orders.map(order =>
-      order.id === orderId ? { ...order, kotStatus: newStatus, isDone: newStatus === 'done' } : order
-    )
-    localStorage.setItem('kotLogs', JSON.stringify(updated))
-
-    // Sync to backend API
-    try {
-      await fetch('/api/orders', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kotId: orderId,
-          orderId: orderId,
-          id: orderId,
-          status: newStatus === 'done' ? 'done' : 'preparing',
-          kotStatus: newStatus,
-        })
-      })
-    } catch (err) {
-      console.error('Failed to update KOT status:', err)
-    }
-  }
-
-  const handlePreparing = (orderId: string) => {
-    updateKotStatus(orderId, 'preparing')
-  }
-
-  const handleDone = (orderId: string) => {
-    updateKotStatus(orderId, 'done')
-  }
 
   const uniqueTables = [...new Set(orders
     .filter(order => order.tableNumber !== null && order.tableNumber !== undefined)
@@ -166,8 +159,19 @@ export default function OrderLogsPage() {
       case 'card': return '💳 Card';
       case 'upi': return '📱 UPI';
       case 'split': return '🔀 Split';
-      default: return '\u2014';
+      default: return '—';
     }
+  }
+
+  // If chef somehow lands here before redirect, show minimal UI
+  if (userRole === 'chef') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-lg">Redirecting to Kitchen Orders...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -186,10 +190,10 @@ export default function OrderLogsPage() {
               <ChefHat size={32} className="text-orange-500" />
               <div>
                 <h1 className="text-4xl font-bold text-slate-900 dark:text-white">
-                  {userRole === 'chef' ? 'Kitchen Orders' : 'Order Logs'}
+                  KOT Logs
                 </h1>
                 <p className="text-slate-600 dark:text-slate-300 mt-1">
-                  {userRole === 'chef' ? 'Prepare orders and mark them as done' : 'All orders with dates & payment modes'}
+                  Complete KOT history — all dates (Admin / Cashier only)
                 </p>
               </div>
             </div>
@@ -199,7 +203,7 @@ export default function OrderLogsPage() {
               onClick={fetchOrders}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition shadow-md"
             >
-              &#x1F504; Refresh
+              🔄 Refresh
             </button>
           </div>
         </div>
@@ -230,7 +234,7 @@ export default function OrderLogsPage() {
         {/* Stats */}
         <div className="grid grid-cols-4 gap-4 mb-8">
           <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-            <p className="text-sm text-slate-600 dark:text-slate-400 font-semibold">Total Orders</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-semibold">Total KOTs</p>
             <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{orders.length}</p>
           </div>
           <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
@@ -248,7 +252,7 @@ export default function OrderLogsPage() {
           <div className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
             <p className="text-sm text-slate-600 dark:text-slate-400 font-semibold">Revenue</p>
             <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-              &#x20B9;{orders.reduce((sum, o) => sum + (o.total || 0), 0).toLocaleString()}
+              ₹{orders.reduce((sum, o) => sum + (o.total || 0), 0).toLocaleString()}
             </p>
           </div>
         </div>
@@ -259,7 +263,7 @@ export default function OrderLogsPage() {
             <div className="inline-block mb-4">
               <div className="animate-spin rounded-full h-12 w-12 border-4 border-slate-300 dark:border-slate-600 border-t-blue-600"></div>
             </div>
-            <p className="text-slate-600 dark:text-slate-400 text-lg">Loading orders...</p>
+            <p className="text-slate-600 dark:text-slate-400 text-lg">Loading KOT logs...</p>
           </div>
         )}
 
@@ -267,12 +271,12 @@ export default function OrderLogsPage() {
         {!loading && filteredOrders.length === 0 && (
           <div className="text-center py-12 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
             <ChefHat size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-4" />
-            <p className="text-slate-600 dark:text-slate-400 text-lg font-semibold">No orders found</p>
+            <p className="text-slate-600 dark:text-slate-400 text-lg font-semibold">No KOTs found</p>
             <p className="text-slate-500 dark:text-slate-500 text-sm mt-2">Try adjusting your filters</p>
           </div>
         )}
 
-        {/* Orders */}
+        {/* KOT Logs - Read Only for admin/cashier */}
         {!loading && filteredOrders.length > 0 && (
           <div className="grid gap-4">
             {filteredOrders.map((order) => {
@@ -294,82 +298,40 @@ export default function OrderLogsPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                        {order.tableNumber ? `🪑 Table ${order.tableNumber}` : '💼 Walk-in'}
+                        {order.tableNumber ? `🍽️ Table ${order.tableNumber}` : '👥 Walk-in'}
                       </h3>
                       <span className="text-xs bg-orange-600 dark:bg-orange-700 text-white px-3 py-1.5 rounded-full font-bold">
                         KOT #{order.kotCount || 1}
                       </span>
                       {cancelled && (
-                        <span className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-full font-bold">&#x1F6AB; CANCELLED</span>
+                        <span className="text-xs bg-red-600 text-white px-3 py-1.5 rounded-full font-bold">🚫 CANCELLED</span>
                       )}
                       {kotStatus === 'preparing' && !cancelled && (
-                        <span className="text-xs bg-orange-500 text-white px-3 py-1.5 rounded-full font-bold animate-pulse">&#x1F525; PREPARING</span>
+                        <span className="text-xs bg-orange-500 text-white px-3 py-1.5 rounded-full font-bold animate-pulse">🔥 PREPARING</span>
                       )}
-                      {kotStatus === 'done' && (
-                        <span className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-full font-bold">&#x2713; DONE</span>
+                      {kotStatus === 'done' && !cancelled && (
+                        <span className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-full font-bold">✓ DONE</span>
                       )}
                     </div>
-                    {/* Date & Payment Mode Row */}
                     <div className="flex flex-wrap gap-4 text-sm">
                       <p className="text-slate-500 dark:text-slate-400">
-                        &#x1F4C5; {new Date(order.timestamp || order.createdAt).toLocaleDateString('en-IN', {
+                        📅 {new Date(order.timestamp || order.createdAt).toLocaleDateString('en-IN', {
                           day: '2-digit', month: 'short', year: 'numeric',
                           hour: '2-digit', minute: '2-digit'
                         })}
                       </p>
                       {order.paymentMode && (
                         <p className="font-semibold text-slate-600 dark:text-slate-300">
-                          &#x1F4B3; {getPaymentModeIcon(order.paymentMode)}
+                          💳 {getPaymentModeIcon(order.paymentMode)}
                         </p>
                       )}
                       {order.total !== undefined && order.total > 0 && (
-                        <p className="font-bold text-emerald-600">&#x20B9;{order.total.toLocaleString()}</p>
+                        <p className="font-bold text-emerald-600">₹{order.total.toLocaleString()}</p>
                       )}
                     </div>
                   </div>
 
-                  {/* Chef Action Buttons - Preparing / Done */}
-                  <div className="ml-4 flex items-center gap-2">
-                    {cancelled ? (
-                      <button
-                        onClick={() => handleDone(order.id || order._id)}
-                        className={`px-4 py-2 rounded-lg font-semibold transition text-sm ${
-                          kotStatus === 'done'
-                            ? 'bg-emerald-600 text-white shadow-lg'
-                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                        }`}
-                      >
-                        <span className="flex items-center gap-1">
-                          <Check size={16} />
-                          {kotStatus === 'done' ? 'Done' : 'Mark Done'}
-                        </span>
-                      </button>
-                    ) : (
-                      <>
-                        {kotStatus === 'pending' && (
-                          <button
-                            onClick={() => handlePreparing(order.id || order._id)}
-                            className="px-4 py-2 rounded-lg font-semibold transition text-sm bg-orange-500 hover:bg-orange-600 text-white shadow-md"
-                          >
-                            &#x1F525; Preparing
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleDone(order.id || order._id)}
-                          className={`px-4 py-2 rounded-lg font-semibold transition text-sm ${
-                            kotStatus === 'done'
-                              ? 'bg-emerald-600 text-white shadow-lg ring-2 ring-emerald-300'
-                              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                          }`}
-                        >
-                          <span className="flex items-center gap-1">
-                            <Check size={16} />
-                            {kotStatus === 'done' ? 'Done' : 'Done'}
-                          </span>
-                        </button>
-                      </>
-                    )}
-                  </div>
+                  {/* NO ACTION BUTTONS - Read only for admin/cashier */}
                 </div>
 
                 {/* Items */}
@@ -379,7 +341,7 @@ export default function OrderLogsPage() {
                   'bg-slate-50 dark:bg-slate-900/50'
                 }`}>
                   {cancelled && (
-                    <div className="text-red-700 dark:text-red-400 font-bold mb-3 text-center text-lg">&#x26A0;&#xFE0F; ORDER CANCELLED</div>
+                    <div className="text-red-700 dark:text-red-400 font-bold mb-3 text-center text-lg">⚠️ ORDER CANCELLED</div>
                   )}
                   {(getCancelledItems(order)?.length || 0) > 0 && (
                     <div className="space-y-2">
@@ -390,7 +352,7 @@ export default function OrderLogsPage() {
                             <span className="text-sm text-slate-600 dark:text-slate-400">x{item.qty}</span>
                             {item.price > 0 && (
                               <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                                &#x20B9;{(item.price * item.qty).toFixed(2)}
+                                ₹{(item.price * item.qty).toFixed(2)}
                               </span>
                             )}
                           </div>

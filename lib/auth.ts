@@ -5,9 +5,12 @@ export interface DecodedToken {
   userId: string
   email: string
   username: string
+  role: string
   restaurantName: string
   restaurantId: string
+  restaurantUsername?: string
   isAdmin: boolean
+  isRoleAccount?: boolean
   iat: number
   exp: number
 }
@@ -68,4 +71,33 @@ export function requireAdmin() {
 
     return session
   }
+}
+
+/**
+ * Server-side role validation
+ * Throws if the user does not have one of the allowed roles
+ */
+export function requireRole(...allowedRoles: string[]) {
+  return async function middleware() {
+    const session = await getServerSession()
+    
+    if (!session) {
+      throw new Error('Unauthorized - No session')
+    }
+
+    if (!allowedRoles.includes(session.role || 'admin')) {
+      throw new Error(`Unauthorized - Requires one of: ${allowedRoles.join(', ')}`)
+    }
+
+    return session
+  }
+}
+
+/**
+ * Check if user has access to a specific resource
+ * Verifies restaurantId matches
+ */
+export function verifyRestaurantAccess(session: DecodedToken | null, resourceRestaurantId: string): boolean {
+  if (!session || !session.restaurantId) return false
+  return session.restaurantId === resourceRestaurantId
 }

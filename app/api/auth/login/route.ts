@@ -36,10 +36,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (role && restaurantUsername) {
-      // Role-based login: find the admin user by restaurant username to get restaurantId
+      // Role-based login: find the admin user by restaurant username 
+      // (username is unique, no need to check isAdmin since legacy users may have isAdmin: false)
       const adminUser = await db.collection('users').findOne({
-        username: restaurantUsername,
-        isAdmin: true
+        username: restaurantUsername
       })
 
       if (!adminUser) {
@@ -142,15 +142,16 @@ export async function POST(req: NextRequest) {
     // Check subscription status
     const subscriptionCheck = await subscriptionService.checkSubscription(user._id.toString())
 
-    // Create JWT token with restaurantId
+    // Create JWT token with restaurantId and restaurantUsername
     const token = jwt.sign({
       userId: user._id.toString(),
       email: user.email,
       username: user.username,
       role: 'admin',
       restaurantName: user.restaurantName,
+      restaurantUsername: user.restaurantUsername || user.username,
       restaurantId: user._id.toString(),
-      isAdmin: user.isAdmin || false
+      isAdmin: true // Primary account owners are always admins
     }, JWT_SECRET, { expiresIn: '24h' })
 
     // Update last login time
@@ -169,7 +170,8 @@ export async function POST(req: NextRequest) {
         name: user.name,
         role: 'admin',
         restaurantName: user.restaurantName,
-        isAdmin: user.isAdmin || false,
+        restaurantUsername: user.restaurantUsername || user.username,
+        isAdmin: true, // Primary account owners are always admins
         isFirstLogin: user.isFirstLogin || false,
         tablesCount: user.tablesCount || 0
       },

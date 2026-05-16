@@ -1,244 +1,147 @@
 /**
- * Persistent User Storage - Stores user data separately from site cache
- * Uses localStorage with a separate namespace to survive cache clearing
+ * Persistent User Storage
+ * Provides a consistent interface for storing and retrieving user session data
+ * across localStorage, cookies, and in-memory state.
  */
 
-export interface OfflineUser {
-  id: string;
-  email: string;
-  password: string; // Should be hashed in production
-  name: string;
-  role: 'admin' | 'manager' | 'waiter' | 'chef';
-  createdAt: string;
-  lastLogin?: string;
+interface StoredUser {
+  id: string
+  username: string
+  email: string
+  name: string
+  role: string
+  restaurantName: string
+  restaurantId: string
+  restaurantUsername?: string
+  isAdmin: boolean
+  isRoleAccount?: boolean
+  tablesCount?: number
 }
 
 class PersistentUserStorage {
-  private namespace = '__RESTAURANT_USERS__';
-  private lockNamespace = '__RESTAURANT_LOCK__';
-  private tablesNamespace = '__RESTAURANT_TABLES__';
-  private setupNamespace = '__RESTAURANT_SETUP__';
+  private currentUser: StoredUser | null = null
+  private listeners: Array<(user: StoredUser | null) => void> = []
 
   /**
-   * Check if system needs activation code
+   * Save user data after login
+   */
+  setCurrentUser(user: StoredUser): void {
+    this.currentUser = user
+    // Save to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('currentUser', JSON.stringify(user))
+      localStorage.setItem('user', JSON.stringify(user))
+      // Also set a non-httpOnly cookie for client-side access
+      document.cookie = `userRole=${user.role}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax`
+      document.cookie = `userId=${user.id}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax`
+    }
+    this.notifyListeners()
+  }
+
+  /**
+   * Get current user from memory or localStorage
+   */
+  getCurrentUser(): StoredUser | null {
+    if (this.currentUser) return this.currentUser
+
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('currentUser')
+        if (stored) {
+          this.currentUser = JSON.parse(stored)
+          return this.currentUser
+        }
+        // Fallback to 'user' key
+        const storedUser = localStorage.getItem('user')
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser)
+          // Ensure role field is set
+          if (!parsed.role) {
+            parsed.role = parsed.isAdmin ? 'admin' : 'user'
+          }
+          // Set restaurantId if not present
+          if (!parsed.restaurantId) {
+            parsed.restaurantId = parsed.id || parsed.userId || ''
+          }
+          this.currentUser = parsed
+          localStorage.setItem('currentUser', JSON.stringify(parsed))
+          return this.currentUser
+        }
+      } catch {
+        return null
+      }
+    }
+    return null
+  }
+
+  /**
+   * Get the user's role
+   */
+  getUserRole(): string {
+    const user = this.getCurrentUser()
+    return user?.role || 'admin'
+  }
+
+  /**
+   * Get the restaurantId
+   */
+  getRestaurantId(): string | null {
+    const user = this.getCurrentUser()
+    return user?.restaurantId || user?.id || null
+  }
+
+  /**
+   * Check if current user is admin
+   */
+  isAdmin(): boolean {
+    const user = this.getCurrentUser()
+    return user?.isAdmin === true || user?.role === 'admin'
+  }
+
+  /**
+   * Check if the system is locked (not subscribed)
+   * Returns false by default since subscription checks happen server-side
    */
   isLocked(): boolean {
-    const lockData = this.getLockData();
-    if (!lockData) return false;
-
-    const now = new Date();
-    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const lastUnlockDate = new Date(lockData.lastUnlockDate);
-
-    return lastUnlockDate < thisMonthStart;
+    return false
   }
 
   /**
-   * Get days remaining in subscription (before next month lock)
-   */
-  getDaysRemaining(): number {
-    const lockData = this.getLockData();
-    if (!lockData) return 0;
-
-    const now = new Date();
-    const lastUnlockDate = new Date(lockData.lastUnlockDate);
-
-    // Calculate when next month starts (expiry date)
-    const nextMonthStart = new Date(
-      lastUnlockDate.getFullYear(),
-      lastUnlockDate.getMonth() + 1,
-      1
-    );
-
-    const daysRemaining = Math.ceil(
-      (nextMonthStart.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    return Math.max(0, daysRemaining);
-  }
-
-  /**
-   * Check if subscription renewal notice should be shown (within 3 days of expiry)
-   */
-  shouldShowRenewalNotice(): boolean {
-    const daysRemaining = this.getDaysRemaining();
-    return daysRemaining <= 3 && daysRemaining > 0;
-  }
-
-  /**
-   * Unlock system with secret code
-   */
-  unlockSystem(code: string): boolean {
-    if (code === 'NEXUS2026SHAURYA') {
-      const lockData = {
-        lastUnlockDate: new Date().toISOString(),
-        codeAttempts: 0,
-      };
-      localStorage.setItem(this.lockNamespace, JSON.stringify(lockData));
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Initialize lock on first setup
-   */
-  initializeLock(): void {
-    const lockData = {
-      lastUnlockDate: new Date().toISOString(),
-      codeAttempts: 0,
-    };
-    localStorage.setItem(this.lockNamespace, JSON.stringify(lockData));
-  }
-
-  private getLockData(): any {
-    try {
-      const data = localStorage.getItem(this.lockNamespace);
-      return data ? JSON.parse(data) : null;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Save user account
-   */
-  saveUser(user: OfflineUser): void {
-    try {
-      const users = this.getAllUsers();
-      const existingIndex = users.findIndex((u) => u.email === user.email);
-
-      if (existingIndex > -1) {
-        users[existingIndex] = user;
-      } else {
-        users.push(user);
-      }
-
-      localStorage.setItem(this.namespace, JSON.stringify(users));
-    } catch (error) {
-      console.error('Error saving user:', error);
-    }
-  }
-
-  /**
-   * Get all saved users
-   */
-  getAllUsers(): OfflineUser[] {
-    try {
-      const data = localStorage.getItem(this.namespace);
-      return data ? JSON.parse(data) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Login user - verify credentials
-   */
-  loginUser(email: string, password: string): OfflineUser | null {
-    const users = this.getAllUsers();
-    const user = users.find((u) => u.email === email && u.password === password);
-
-    if (user) {
-      user.lastLogin = new Date().toISOString();
-      this.saveUser(user);
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      return user;
-    }
-    return null;
-  }
-
-  /**
-   * Get current logged-in user
-   */
-  getCurrentUser(): OfflineUser | null {
-    try {
-      const data = localStorage.getItem('currentUser');
-      return data ? JSON.parse(data) : null;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Logout user
+   * Clear user data on logout
    */
   logout(): void {
-    localStorage.removeItem('currentUser');
+    this.currentUser = null
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('currentUser')
+      localStorage.removeItem('user')
+      localStorage.removeItem('token')
+      document.cookie = 'userRole=; path=/; max-age=0; SameSite=Lax'
+      document.cookie = 'userId=; path=/; max-age=0; SameSite=Lax'
+    }
+    this.notifyListeners()
   }
 
   /**
-   * Check if user exists
+   * Subscribe to user changes
    */
-  userExists(email: string): boolean {
-    const users = this.getAllUsers();
-    return users.some((u) => u.email === email);
-  }
-
-  /**
-   * Save setup data (tables count, etc.)
-   */
-  saveSetup(data: any): void {
-    try {
-      localStorage.setItem(this.setupNamespace, JSON.stringify(data));
-    } catch (error) {
-      console.error('Error saving setup:', error);
+  subscribe(listener: (user: StoredUser | null) => void): () => void {
+    this.listeners.push(listener)
+    // Immediately call with current state
+    listener(this.currentUser)
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== listener)
     }
   }
 
-  /**
-   * Get setup data
-   */
-  getSetup(): any {
-    try {
-      const data = localStorage.getItem(this.setupNamespace);
-      return data ? JSON.parse(data) : null;
-    } catch {
-      return null;
+  private notifyListeners(): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(this.currentUser)
+      } catch {
+        // Ignore listener errors
+      }
     }
-  }
-
-  /**
-   * Check if setup is complete
-   */
-  isSetupComplete(): boolean {
-    const setup = this.getSetup();
-    return setup && setup.tablesCount > 0;
-  }
-
-  /**
-   * Save tables to local storage
-   */
-  saveTables(tables: any[]): void {
-    try {
-      localStorage.setItem(this.tablesNamespace, JSON.stringify(tables));
-    } catch (error) {
-      console.error('Error saving tables:', error);
-    }
-  }
-
-  /**
-   * Get tables from local storage
-   */
-  getTables(): any[] {
-    try {
-      const data = localStorage.getItem(this.tablesNamespace);
-      return data ? JSON.parse(data) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Clear all data (admin function)
-   */
-  clearAllData(): void {
-    localStorage.removeItem(this.namespace);
-    localStorage.removeItem(this.lockNamespace);
-    localStorage.removeItem(this.tablesNamespace);
-    localStorage.removeItem(this.setupNamespace);
-    localStorage.removeItem('currentUser');
   }
 }
 
-export const persistentUserStorage = new PersistentUserStorage();
+export const persistentUserStorage = new PersistentUserStorage()

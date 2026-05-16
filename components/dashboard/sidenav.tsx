@@ -67,9 +67,9 @@ export default function SideNav({ isOpen, onToggle }: SideNavProps) {
     { label: 'Contact Us', href: '/dashboard/contact', icon: '📞', color: 'blue' },
   ]
 
-  // Chef menu - KOT Logs only + Contact Us
+  // Chef menu - KOT (today's orders) + Contact Us
   const chefMenu = [
-    { label: 'KOT Logs', href: '/dashboard/order-logs', icon: '🧾', color: 'teal' },
+    { label: 'KOT', href: '/dashboard/kitchen', icon: '🔥', color: 'red' },
     { label: 'Contact Us', href: '/dashboard/contact', icon: '📞', color: 'blue' },
   ]
 

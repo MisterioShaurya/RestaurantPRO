@@ -147,7 +147,7 @@ export default function DashboardHome({ user }: { user: any }) {
                   <tr key={order.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200">
                     <td className="px-6 py-4 text-sm font-semibold text-gray-900">{order.id.substring(0, 8)}</td>
                     <td className="px-6 py-4 text-sm text-gray-700">{order.tableNumber ? `Table ${order.tableNumber}` : order.customerName || 'Walk-in'}</td>
-                    <td className="px-6 py-4 text-sm font-bold text-gray-900">${order.total.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-sm font-bold text-gray-900">₹{order.total.toFixed(2)}</td>
                     <td className="px-6 py-4 text-sm">
                       <span className={`inline-flex items-center px-3 py-1 font-semibold rounded-full text-xs ${
                         order.status === 'completed' ? 'bg-green-100 text-green-800' :
